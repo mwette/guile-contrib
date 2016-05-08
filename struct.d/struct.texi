@@ -10,12 +10,12 @@
 @node Struct
 @section Struct Module
 
-The @code{(potluck struct)} module provides procedures for packing and
+The @code{(struct)} module provides procedures for packing and
 unpacking scheme data to and from bytevectors based on a format string.
 @c (@ref{Bytevectors})
 
 @example
-(use-modules (potluck struct))
+(use-modules (struct))
 
 ;; pack two unsigned shorts and a double float in big endian order
 (define data (pack ">2Hd" 3 22 34.0))

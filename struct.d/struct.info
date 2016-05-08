@@ -1,4 +1,4 @@
-This is struct.info, produced by texi2any version 6.0 from
+This is struct.info, produced by texi2any version 6.1 from
 wrap-struct.texi.
 
 1 Wrapper
@@ -10,10 +10,10 @@ File: struct.info,  Node: Struct
 1.1 Struct Module
 =================
 
-The '(potluck struct)' module provides procedures for packing and
-unpacking scheme data to and from bytevectors based on a format string.
+The '(struct)' module provides procedures for packing and unpacking
+scheme data to and from bytevectors based on a format string.
 
-     (use-modules (potluck struct))
+     (use-modules (struct))
 
      ;; pack two unsigned shorts and a double float in big endian order
      (define data (pack ">2Hd" 3 22 34.0))

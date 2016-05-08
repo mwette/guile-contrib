@@ -1,19 +1,10 @@
-If you have used the Python struct module then this will look familiar.
-Otherwise, check out https://docs.python.org/2/library/struct.html
+1.1 Struct Module
+=================
 
-Attached are three files:
-* struct.scm: the source code
-* struct.texi: documentation
-* struct.test: test code
+The '(struct)' module provides procedures for packing and unpacking
+scheme data to and from bytevectors based on a format string.
 
-
-Struct Module
-=============
-
-The '(potluck struct)' module provides procedures for packing and
-unpacking scheme data to and from bytevectors based on a format string.
-
-     (use-modules (potluck struct))
+     (use-modules (struct))
 
      ;; pack two unsigned shorts and a double float in big endian order
      (define data (pack ">2Hd" 3 22 34.0))
@@ -71,3 +62,9 @@ string padding
      'pack' assumes that the string length in the format is the same as
      in the passed string.  Non-conformance is not trapped as an error.
 
+
+
+Tag Table:
+Node: Struct99
+
+End Tag Table
