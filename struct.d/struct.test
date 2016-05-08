@@ -1,0 +1,116 @@
+;; struct.test				-*- scheme -*-
+;;
+;; Copyright (C) 2015 Matthew R. Wette
+;; 
+;; Copying and distribution of this file, with or without modification,
+;; are permitted in any medium without royalty provided the copyright
+;; notice and this notice are preserved.  This file is offered as-is,
+;; without any warranty.
+
+(use-modules (struct))			; pack, unpack, packed-size
+(use-modules (rnrs bytevectors))
+(use-modules (srfi srfi-2))		; and-let*
+
+(set! *random-state* (random-state-from-platform))
+
+(define (test1)
+  (if (not (and-let*
+	       (((= (packed-size "33s") 33))
+		((= (packed-size "4I") 16))
+		((= (packed-size "3B") 3))
+		((= (packed-size "i") 4))
+		)))
+      (error "packed-size broken")))
+
+(define (test2)
+  (let* ((bv04 (make-bytevector 4)))
+    ;; i
+    (bytevector-s32-set! bv04 0 -1234 (native-endianness))
+    (or (= (car (unpack "i" bv04)) -1234) (error "error"))
+    ;; I
+    (bytevector-s32-set! bv04 0 1234 (native-endianness))
+    (or (= (car (unpack "I" bv04)) 1234) (error "error"))
+    ))
+
+(define (test3)
+  (let* ((data (pack "I" 1234))
+	 (vals (unpack "I" data)))
+    (if (eqv? (car vals) 1234) #t (error "failed"))
+    #t))
+
+(define (test4)
+  (define data (pack ">2Hd" 3 22 34.0)) ; pack two unsigned and a double
+  (write data)(newline)
+  (write (unpack ">2Hd" data))(newline))
+
+
+(define (test5)
+
+  ;; make a truncated copy of a bytevector
+  (define (mk-bvec bv0 len)
+    (let ((bv1 (make-bytevector len)))
+      (bytevector-copy! bv0 0 bv1 0 len)
+      bv1))
+
+  ;; check pack/unpack consistency given
+  ;;   format string, binary data, and list of datums
+  (define (do-test format data vals)
+    (when #f
+      (simple-format #t "fm=~S\n" format)
+      (simple-format #t "xv=~S\n" vals)
+      (simple-format #t "us=~S\n" (unpack format data)))
+    ;; Test pack:
+    (if (not (equal? data (apply pack format vals)))
+	(error "pack not working"))
+    ;; Test unpack:
+    (let iter ((xvals vals) (svals (unpack format data)))
+      (cond
+       ((and (null? xvals) (pair? svals))
+	(error "mismatched count"))
+       ((and (pair? xvals) (null? svals))
+	(error "mismatched count"))
+       ((null? xvals)
+	#t)
+       ((not (eqv? (car xvals) (car svals)))
+	(error "value mismatch"))
+       (else
+	(iter (cdr xvals) (cdr svals)))))
+    #f)
+
+  (define (r-ct) (random 5))
+  (define (r-ty) (random 8))
+  
+  (let ((bv (make-bytevector 1024))
+	(nd (native-endianness))
+	)
+    (let iter ((fl '()) (bx 0) (xpt '()) (rc (r-ct)) (rt (r-ty)))
+      ;;(simple-format #t "fl=~S bx=~S xpt=~S\n" fl bx xpt)
+      (case rt
+	((0)
+	 (do-test (string-join (reverse fl) "") (mk-bvec bv bx) (reverse xpt)))
+	((1)
+	 (bytevector-s8-set! bv bx -123)
+	 (iter (cons "1b" fl) (+ 1 bx) (cons -123 xpt) (r-ct) (r-ty)))
+	((2)
+	 (bytevector-s16-set! bv bx -1234 nd)
+	 (iter (cons "1h" fl) (+ 2 bx) (cons -1234 xpt) (r-ct) (r-ty)))
+	((3)
+	 (bytevector-s32-set! bv bx -9123 nd)
+	 (iter (cons "1i" fl) (+ 4 bx) (cons -9123 xpt) (r-ct) (r-ty)))
+	((4)
+	 (bytevector-s32-set! bv bx -3991123 nd)
+	 (iter (cons "1l" fl) (+ 4 bx) (cons -3991123 xpt) (r-ct) (r-ty)))
+	((5)
+	 (bytevector-s64-set! bv bx -3339123 nd)
+	 (iter (cons "1q" fl) (+ 8 bx) (cons -3339123 xpt) (r-ct) (r-ty)))
+	((6)
+	 (bytevector-ieee-single-set! bv bx 1.32e4 nd)
+	 (iter (cons "1f" fl) (+ 4 bx) (cons 1.32e4 xpt) (r-ct) (r-ty)))
+	((7)
+	 (bytevector-ieee-double-set! bv bx 1.32e4 nd)
+	 (iter (cons "1d" fl) (+ 8 bx) (cons 1.32e4 xpt) (r-ct) (r-ty)))
+	))))
+
+(test5)
+
+;; --- last line ---

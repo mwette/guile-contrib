@@ -1,0 +1,6 @@
+\input texinfo.tex
+@setfilename struct.info
+@settitle Wrapper
+@chapter Wrapper
+@include struct.texi
+@bye

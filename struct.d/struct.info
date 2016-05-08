@@ -1,0 +1,79 @@
+This is struct.info, produced by texi2any version 6.0 from
+wrap-struct.texi.
+
+1 Wrapper
+*********
+
+
+File: struct.info,  Node: Struct
+
+1.1 Struct Module
+=================
+
+The '(potluck struct)' module provides procedures for packing and
+unpacking scheme data to and from bytevectors based on a format string.
+
+     (use-modules (potluck struct))
+
+     ;; pack two unsigned shorts and a double float in big endian order
+     (define data (pack ">2Hd" 3 22 34.0))
+     (write data) (newline)
+     ==>
+     #vu8(0 3 0 22 64 65 0 0 0 0 0 0)
+
+     ;; verify using unpack
+     (write (unpack ">2Hd" data)) (newline)
+     ==>
+     (3 22 34.0)
+
+ -- Scheme Procedure: pack format vals ...
+     Return a bytevector that contains encoded data from VALS, based on
+     the string FORMAT.
+
+ -- Scheme Procedure: unpack format bvec
+     Return a list of scheme objects decoded from the bytevector BVEC,
+     based on the string FORMAT.
+
+ -- Scheme Procedure: packed-size format
+     Return the number of bytes represented by the string FORMAT.
+
+   The _format_ string used for PACK and UNPACK is constructed as a
+sequence of digits, representing a repeat count, and codes, representing
+the binary content.
+
+The string may optionally begin with a special character that represents
+the endianness:
+    =        native endianness
+    <        little-endian
+    >        big-endian
+    !        network order -- i.e., big-endian
+
+Type codes used in the format string are interpreted as follows:
+    x        blank byte
+    c        8-bit character
+    ?        boolean
+    b        signed 8-bit integer
+    B        unsigned 8-bit integer
+    h        signed 16-bit integer
+    H        unsigned 16-bit integer
+    i        signed 32-bit integer
+    I        unsigned 32-bit integer
+    l        signed 32-bit integer
+    L        unsigned 32-bit integer
+    q        signed 64-bit integer
+    Q        unsigned 64-bit integer
+    f        32-bit IEEE floating point
+    d        64-bit IEEE floating point
+    s        string
+
+   The following issues remain to be addressed:
+string padding
+     'pack' assumes that the string length in the format is the same as
+     in the passed string.  Non-conformance is not trapped as an error.
+
+
+
+Tag Table:
+Node: Struct99
+
+End Tag Table
