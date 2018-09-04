@@ -25,6 +25,7 @@
 ;; todo: remove old docstring, if present
 ;; todo: robustly find "(define ("
 ;; todo: handle (define foo (let (...) (lambda (...) "docstring"
+;; todo: set up key bindings -- seem to be having problems here (w/ Geiser)
 
 ;;; Code:
 
@@ -38,14 +39,15 @@ and is preceeded by comments that provide documentation between
   ;; @deffn ...
 and 
   ;; @end deffn
-Then set point to just before `(define (' and hit `C-cC->'.  
+Then set point to just before `(define (' and hit `C-cd'.  
 A texi2any formatted docstring will be inserted."
   nil
   " Tx"
-  '(([(control c) (control d)] . scheme-texidoc-transfer-deffn))
+  ;;'(([(control c) d] . scheme-texidoc-transfer-deffn))
+  '(("\C-c d" . scheme-texidoc-transfer-deffn))
   )
 
-(defvar scheme-texidoc-version "v180902f")
+(defvar scheme-texidoc-version "v180903b")
 
 (defvar scheme-texidoc-texi-buffer-name "*scmtxi texi*")
 (defvar scheme-texidoc-text-buffer-name "*scmtxi text*")
@@ -83,13 +85,20 @@ A texi2any formatted docstring will be inserted."
 	  )
       (while (not (looking-at "(")) (forward-line))
       (cond
+       ;; (define (a b c) "docstring"
        ((looking-at "(define *(")
 	(skip-chars-forward 9)
 	(forward-sexp)
 	(set! doc-pt (point)))
+
+       ;; (define name (let (..) (lambda (s) "docstring"
        ((looking-at "(define *[^ (]")
 	(re-search-forward "(lambda (" 100)
 	(error "not implemented"))
+
+       ;; (define-syntax name (lambda (s) "docstring"
+       ;; TBD
+
        (t
 	(error "couldn't find location for docstring")))
       (goto-char doc-pt)
@@ -159,7 +168,7 @@ A texi2any formatted docstring will be inserted."
 	(beginning-of-line)
 	;; Insert text from bufffer and indent.
 	(let ((inspt (point)))
-	  (insert "\"" text "\"\n")
+	  (insert (format "%S\n" text))
 	  (goto-char inspt)
 	  (indent-for-tab-command))
 	))))
