@@ -39,15 +39,14 @@ and is preceeded by comments that provide documentation between
   ;; @deffn ...
 and 
   ;; @end deffn
-Then set point to just before `(define (' and hit `C-cd'.  
+Then set point to just before `(define (' and hit C-c t d'.  
 A texi2any formatted docstring will be inserted."
   nil
   " Tx"
-  ;;'(([(control c) d] . scheme-texidoc-transfer-deffn))
-  '(("\C-c d" . scheme-texidoc-transfer-deffn))
+  '(("\C-ctd" . scheme-texidoc-transfer-deffn))
   )
 
-(defvar scheme-texidoc-version "v180903b")
+(defvar scheme-texidoc-version "v180905a")
 
 (defvar scheme-texidoc-texi-buffer-name "*scmtxi texi*")
 (defvar scheme-texidoc-text-buffer-name "*scmtxi text*")
@@ -141,6 +140,8 @@ A texi2any formatted docstring will be inserted."
 	   (tx-st (find-deffn-above))	  ; texi start 
 	   (tx-nd (find-end-deffn-below)) ; texi end
 	   (scm-buf (current-buffer)))	  ; user buffer
+      (unless (and tx-st tx-nd)
+	(error "@deffn ... @end deffn not found"))
       ;; Copy texi to working buffer and remove leading comment chars.
       (set-buffer (get-buffer-create scheme-texidoc-texi-buffer-name))
       (texinfo-mode)
