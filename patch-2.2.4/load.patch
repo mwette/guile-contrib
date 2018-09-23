@@ -1,0 +1,166 @@
+
+--- ./test-suite/tests/load-lang.test-orig	2018-09-08 06:59:11.133393116 -0700
++++ ./test-suite/tests/load-lang.test	2018-09-08 07:14:35.503238623 -0700
+@@ -0,0 +1,36 @@
++;;;; load-lang.test - test loading extension languages	-*- scheme -*-
++;;;;
++
++
++(define-module (test-suite test-load-lang)
++  #:use-module (test-suite lib))
++
++(define tmp-dir (getcwd))
++
++(define (data-file-name filename)
++  (in-vicinity tmp-dir filename))
++
++(with-test-prefix "load-lang"
++
++  (pass-if "using #lang"
++    (let ((src-file (data-file-name "load1js")))
++      (with-output-to-file src-file
++	(lambda ()
++	  (display "#lang ecmascript\n")
++	  (display "function js_1pl(b) { return 1 + b; }\n")))
++      (load src-file)
++      ;;(delete-file src-file)
++      (= (js_1pl 2) 3)))
++
++  #;(pass-if "using dot-js"
++    (let ((src-file (data-file-name "load2.js")))
++      (with-output-to-file src-file
++	(lambda ()
++	  (display "function js_2pl(b) { return 2 + b; }\n")))
++      (load src-file)
++      ;;(delete-file src-file)
++      (= (js_2pl 2) 4)))
++
++  )
++
++;; --- last line ---
+--- ./module/system/base/compile.scm-orig	2016-08-01 04:32:31.000000000 -0700
++++ ./module/system/base/compile.scm	2018-09-08 06:10:55.398509996 -0700
+@@ -28,6 +28,8 @@
+   #:use-module (ice-9 receive)
+   #:export (compiled-file-name
+             compile-file
++	    add-lang-extension
++	    lang-extension-for
+             compile-and-load
+             read-and-compile
+             compile
+@@ -132,11 +134,68 @@
+          (and (false-if-exception (ensure-directory (dirname f)))
+               f))))
+ 
++;; --- new ---------------------------
++
++(define (lang-from-port port)
++
++  (define (release chl)
++    (let loop ((chl chl))
++      (unless (null? chl)
++	(unread-char (car chl) port)
++	(loop (cdr chl))))
++    #f)
++
++  (define (return chl)
++    (string->symbol (reverse-list->string chl)))
++	  
++  (let loop ((cl '()) (st 0) (kl '(#\# #\l #\a #\n #\g)) (ch (read-char port)))
++    (case st
++      ((0) (cond			; read `#lang'
++	    ((eof-object? ch) (release cl))
++	    ((null? kl) (loop cl 1 kl ch))
++	    ((char=? ch (car kl))
++	     (loop (cons ch cl) st (cdr kl) (read-char port)))
++	    (else (release (cons ch cl)))))
++      ((1) (cond			; skip spaces
++	    ((eof-object? ch) (release cl))
++	    ((char=? ch #\space) (loop (cons ch cl) st kl (read-char port)))
++	    (else (loop cl 2 '() ch))))
++      ((2) (cond			; collect lang name
++	    ((eof-object? ch) (return kl))
++	    ((char=? ch #\newline) (return kl))
++	    ((char-whitespace? ch) (loop cl 3 kl ch))
++	    (else (loop cl st (cons ch kl) (read-char port)))))
++      ((3) (cond
++	    ((eof-object? ch) (return kl))
++	    ((char=? ch #\newline) (return kl))
++	    (else (loop cl st kl (read-char port))))))))
++
++(define %file-extension-map
++  '(("scm" . scheme)
++    ("el" . elisp)
++    ("js" . ecmascript)))
++
++(define (add-lang-extension tag lang)
++  (unless (and (string? tag) (symbol? lang))
++    (error "expecting string symbol"))
++  (set! %file-extension-map (acons tag lang %file-extension-map)))
++
++(define (lang-extension-for tag)
++  (assoc-ref %file-extension-map tag))
++
++(define* (lang-from-file file)
++  (let* ((ix (string-rindex file #\.))
++	(ext (and ix (substring file (1+ ix)))))
++    (and ext (assoc-ref %file-extension-map ext))))
++
++
++;; -----------------------------------
++
+ (define* (compile-file file #:key
+                        (output-file #f)
+-                       (from (current-language))
++                       (from #f)
+                        (to 'bytecode)
+-                       (env (default-environment from))
++                       (env #f)
+                        (opts '())
+                        (canonicalization 'relative))
+   (with-fluids ((%file-port-name-canonicalization canonicalization))
+@@ -151,11 +210,18 @@
+       (ensure-directory (dirname comp))
+       (call-with-output-file/atomic comp
+         (lambda (port)
+-          ((language-printer (ensure-language to))
+-           (read-and-compile in #:env env #:from from #:to to #:opts
+-                             (cons* #:to-file? #t opts))
+-           port))
+-        file)
++	  (let* ((from (or from
++			   (lang-from-port in)
++			   (lang-from-file file)
++			   (current-language)))
++		 (env (or env (default-environment from))))
++	    ;;(simple-format #t "from=~S\n" from)
++	    ;;(simple-format #t "  la=~S\n" (peek-char in))
++	    ((language-printer (ensure-language to))
++	     (read-and-compile in #:env env #:from from #:to to #:opts
++			       (cons* #:to-file? #t opts))
++	     port)))
++	file)
+       comp)))
+ 
+ (define* (compile-and-load file #:key (from (current-language)) (to 'value)
+--- ./module/scripts/compile.scm-orig	2018-09-23 08:03:36.461777531 -0700
++++ ./module/scripts/compile.scm	2018-09-23 08:23:40.714232070 -0700
+@@ -198,7 +198,7 @@
+                                    (('optimizations . opts) opts)
+                                    (_ '())))
+                                options)))
+-         (from            (or (assoc-ref options 'from) 'scheme))
++         (from            (assoc-ref options 'from))
+          (to              (or (assoc-ref options 'to) 'bytecode))
+          (target          (or (assoc-ref options 'target) %host-type))
+ 	 (input-files     (assoc-ref options 'input-files))
+@@ -233,7 +233,7 @@
+     ;; cross-compiling Guile itself, we can be sure we're loading our own
+     ;; language modules and not those of the Guile being compiled, which may
+     ;; have incompatible .go files.
+-    (lookup-language from)
++    (if from (lookup-language from) (lookup-language 'scheme))
+     (lookup-language to)
+ 
+     (set! %load-path (append load-path %load-path))
