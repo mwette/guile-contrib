@@ -61,10 +61,3 @@ Type codes used in the format string are interpreted as follows:
 string padding
      'pack' assumes that the string length in the format is the same as
      in the passed string.  Non-conformance is not trapped as an error.
-
-
-
-Tag Table:
-Node: Struct99
-
-End Tag Table
