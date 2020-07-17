@@ -4,9 +4,10 @@
 (define pp pretty-print)
 (define (sf fmt . args) (apply simple-format #t fmt args))
 
-(pp (seq-diff "abc" "bcd"))
+(pp (string-diff "abc" "bcd"))
 
-(define (test-sm l) (pp (seq-diff (list-ref l 0) (list-ref l 1))))
+(define (test-sm l)
+   (pp (string-diff (list-ref l 0) (list-ref l 1))))
 
 #|
 (define t1 '("ab" "acab"))

@@ -9,7 +9,7 @@
 ;; This software is reserved for personal use by the copyright holder.
 
 (define-module (seqdiff)
-  #:export (seq-diff str-diff make-seq-rout str-procs)
+  #:export (sequence-diff string-diff make-seq-rout str-procs)
   #:use-module (srfi srfi-9))
 
 (define-record-type seq-procs
@@ -23,7 +23,7 @@
   )
 
 ;; junk? is predicate taking elt
-(define* (seq-diff a b procs #:optional junk?)
+(define* (sequence-diff a b procs #:optional junk?)
   (letrec*
       ((seq-len (seq-len-proc procs))
        (seq-ref (seq-ref-proc procs))
@@ -118,7 +118,7 @@
 (define str-procs (make-seq-procs string-length string-ref char=?
 				  hashq-ref hashq-set!))
 
-(define* (str-diff a b #:optional junk?)
-  (seq-diff a b str-procs junk?))
+(define* (string-diff a b #:optional junk?)
+  (sequence-diff a b str-procs junk?))
 
 ;; --- last line ---
