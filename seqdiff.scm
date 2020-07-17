@@ -1,20 +1,36 @@
-;; strdiff.scm - based on SequenceMatcher in difflib.py
+;; seqdiff.scm - generate sequence diff
 ;;
 ;; Copyright (C) 2020 Matthew R. Wette
 ;;
+;; This library is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU Lesser General Public
+;; License as published by the Free Software Foundation; either
+;; version 3 of the License, or (at your option) any later version.
 ;; This software is reserved for personal use by the copyright holder.
 
-(define-module (seqdiff))
+(define-module (seqdiff)
+  #:export (seq-diff str-diff make-seq-rout str-procs)
+  #:use-module (srfi srfi-9))
+
+(define-record-type seq-procs
+  (make-seq-procs seq-len seq-ref elt-eq? seq-href seq-hset!)
+  seq-procs?
+  (seq-len seq-len-proc)
+  (seq-ref seq-ref-proc)
+  (elt-eq? elt-eq?-proc)
+  (seq-href seq-href-proc)
+  (seq-hset! seq-hset!-proc)
+  )
 
 ;; junk? is predicate taking elt
-(define* (seq-diff a b
-		   #:optional junk?
-		   #:key
-		   (seq-len string-length) (seq-ref string-ref)
-		   (seq-href hashq-ref) (seq-hset! hashq-set!)
-		   (elt-eq? char=?))
+(define* (seq-diff a b procs #:optional junk?)
   (letrec*
-      ((la (seq-len a))
+      ((seq-len (seq-len-proc procs))
+       (seq-ref (seq-ref-proc procs))
+       (elt-eq? (elt-eq?-proc procs))
+       (seq-href (seq-href-proc procs))
+       (seq-hset! (seq-hset!-proc procs))
+       (la (seq-len a))
        (lb (seq-len b))
        (bx (let* ((bx (make-hash-table 97)))
 	     (let loop ((ix (1- lb)))
@@ -94,25 +110,15 @@
 		       (sz (list-ref fx 2))
 		       (res (add-edits i1 i2 j1 j2 res))
 		       (res (cons `(dup ,i2 ,(+ i2 sz)) res)))
-		  (unless (positive? sz) (sf "broken: fix for zero case!\n"))
+		  (unless (positive? sz) (error "fix for zero case!\n"))
 		  (loop res (+ i2 sz) (+ j2 sz) (cdr fxs))))))))
 
     (gen-ops (get-matches))))
 
-(define (test-sm l) (pp (seq-diff (list-ref l 0) (list-ref l 1))))
+(define str-procs (make-seq-procs string-length string-ref char=?
+				  hashq-ref hashq-set!))
 
-(define t1 '("ab" "acab"))
-(define t2 '("I like this." "I love this."))
-(define t3 '("ab cd ef gh" "ab xy ef"))
-
-(define t4 '("qabxcd" "abycdf"))
-;; delete a[0:1]
-;; equal a[1:3]
-;; replace a[3:4] with b[2:3]
-;; equal a[4:6] b[3:5]
-;; insert b[5:6]?
-
-(test-sm t4)
-
+(define* (str-diff a b #:optional junk?)
+  (seq-diff a b str-procs junk?))
 
 ;; --- last line ---
