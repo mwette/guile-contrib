@@ -1,0 +1,182 @@
+diff --git a/module/scripts/compile.scm b/module/scripts/compile.scm
+index a9e6873af..e64d38d65 100644
+--- a/module/scripts/compile.scm
++++ b/module/scripts/compile.scm
+@@ -209,7 +209,7 @@ There is NO WARRANTY, to the extent permitted by law.~%"))
+                                    (('optimizations . opts) opts)
+                                    (_ '())))
+                                options)))
+-         (from            (or (assoc-ref options 'from) 'scheme))
++         (from            (assoc-ref options 'from))
+          (to              (or (assoc-ref options 'to) 'bytecode))
+          (target          (or (assoc-ref options 'target) %host-type))
+ 	 (input-files     (assoc-ref options 'input-files))
+diff --git a/module/system/base/compile.scm b/module/system/base/compile.scm
+index a33d012bd..3838060df 100644
+--- a/module/system/base/compile.scm
++++ b/module/system/base/compile.scm
+@@ -31,7 +31,9 @@
+             compile
+             decompile
+             default-warning-level
+-            default-optimization-level))
++            default-optimization-level
++            add-lang-extension
++            lang-extension-for))
+ 
+ 
+ (define (level-validator x)
+@@ -44,6 +46,61 @@
+ (define default-warning-level (make-parameter 1 level-validator))
+ (define default-optimization-level (make-parameter 2 level-validator))
+ 
++
++(define (lang-from-port port)
++
++  (define (release chl)
++    (let loop ((chl chl))
++      (unless (null? chl)
++        (unread-char (car chl) port)
++        (loop (cdr chl))))
++    #f)
++
++  (define (return chl)
++    (string->symbol (reverse-list->string chl)))
++  
++  (let loop ((cl '()) (st 0) (kl '(#\# #\l #\a #\n #\g)) (ch (read-char port)))
++    (case st
++      ((0) (cond                        ; read `#lang'
++            ((eof-object? ch) (release cl))
++            ((null? kl) (loop cl 1 kl ch))
++            ((char=? ch (car kl))
++             (loop (cons ch cl) st (cdr kl) (read-char port)))
++            (else (release (cons ch cl)))))
++      ((1) (cond                        ; skip spaces
++            ((eof-object? ch) (release cl))
++            ((char=? ch #\space) (loop (cons ch cl) st kl (read-char port)))
++            (else (loop cl 2 '() ch))))
++      ((2) (cond                        ; collect lang name
++            ((eof-object? ch) (return kl))
++            ((char=? ch #\newline) (return kl))
++            ((char-whitespace? ch) (loop cl 3 kl ch))
++            (else (loop cl st (cons ch kl) (read-char port)))))
++      ((3) (cond
++            ((eof-object? ch) (return kl))
++            ((char=? ch #\newline) (return kl))
++            (else (loop cl st kl (read-char port))))))))
++
++(define %file-extension-map
++  (make-parameter
++   '(("scm" . scheme)
++     ("el" . elisp)
++     ("js" . ecmascript))))
++
++(define (add-lang-extension tag lang)
++  (unless (and (string? tag) (symbol? lang))
++    (error "expecting string symbol"))
++  (%file-extension-map (acons tag lang %file-extension-map)))
++
++(define (lang-extension-for tag)
++  (assoc-ref (%file-extension-map) tag))
++
++(define* (lang-from-file file)
++  (let* ((ix (string-rindex file #\.))
++	 (ext (and ix (substring file (1+ ix)))))
++    (and ext (assoc-ref (%file-extension-map) ext))))
++
++
+ ;;;
+ ;;; Compiler
+ ;;;
+@@ -81,7 +138,9 @@
+ (define (ensure-language x)
+   (if (language? x)
+       x
+-      (lookup-language x)))
++      (if x
++          (lookup-language x)
++          (lookup-language 'scheme))))
+ 
+ ;; Throws an exception if `dir' is not writable.  The mkdir occurs
+ ;; before the check, so that we avoid races (possibly due to parallel
+@@ -166,9 +225,9 @@
+ 
+ (define* (compile-file file #:key
+                        (output-file #f)
+-                       (from (current-language))
++                       (from #f)
+                        (to 'bytecode)
+-                       (env (default-environment from))
++                       (env #f)
+                        (optimization-level (default-optimization-level))
+                        (warning-level (default-warning-level))
+                        (opts '())
+@@ -179,7 +238,12 @@
+                      (error "failed to create path for auto-compiled file"
+                             file)))
+            (in (open-input-file file))
+-           (enc (file-encoding in)))
++           (enc (file-encoding in))
++           (from (or from
++                     (lang-from-port in)
++                     (lang-from-file file)
++                     (current-language)))
++           (env (or env (default-environment from))))
+       ;; Choose the input encoding deterministically.
+       (set-port-encoding! in (or enc "UTF-8"))
+ 
+diff --git a/test-suite/Makefile.am b/test-suite/Makefile.am
+index 16fa2e952..0842db640 100644
+--- a/test-suite/Makefile.am
++++ b/test-suite/Makefile.am
+@@ -75,6 +75,7 @@ SCM_TESTS = tests/00-initial-env.test		\
+ 	    tests/keywords.test			\
+ 	    tests/list.test			\
+ 	    tests/load.test			\
++	    tests/load-lang.test		\
+ 	    tests/match.test			\
+ 	    tests/match.test.upstream		\
+ 	    tests/modules.test			\
+diff --git a/test-suite/tests/load-lang.test b/test-suite/tests/load-lang.test
+new file mode 100644
+index 000000000..067a39ab0
+--- /dev/null
++++ b/test-suite/tests/load-lang.test
+@@ -0,0 +1,37 @@
++;;;; load-lang.test - test loading extension languages	-*- scheme -*-
++;;;;
++
++
++(define-module (test-suite test-load-lang)
++  #:use-module (test-suite lib)
++  #:declarative? #f)
++
++(define tmp-dir (getcwd))
++
++(define (data-file-name filename)
++  (in-vicinity tmp-dir filename))
++
++(with-test-prefix "load-lang"
++
++  (pass-if "using #lang"
++    (let ((src-file (data-file-name "load1js")))
++      (with-output-to-file src-file
++	(lambda ()
++	  (display "#lang ecmascript\n")
++	  (display "function js_1pl(b) { return 1 + b; }\n")))
++      (load src-file)
++      ;;(delete-file src-file)
++      (= (js_1pl 2) 3)))
++
++  #;(pass-if "using dot-js"
++    (let ((src-file (data-file-name "load2.js")))
++      (with-output-to-file src-file
++	(lambda ()
++	  (display "function js_2pl(b) { return 2 + b; }\n")))
++      (load src-file)
++      ;;(delete-file src-file)
++      (= (js_2pl 2) 4)))
++
++  )
++
++;; --- last line ---
