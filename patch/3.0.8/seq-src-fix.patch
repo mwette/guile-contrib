@@ -1,0 +1,11 @@
+--- module/language/tree-il/compile-bytecode.scm-orig	2022-03-19 07:33:07.421769483 -0700
++++ module/language/tree-il/compile-bytecode.scm	2022-03-19 09:37:28.126740690 -0700
+@@ -910,7 +910,7 @@
+     (define (visit-seq exp env ctx)
+       (match exp
+         (($ <seq> src head tail)
+-         (maybe-emit-source src)
++         ;;(maybe-emit-source src)
+          (for-effect head env)
+          (for-context tail env ctx))))
+ 

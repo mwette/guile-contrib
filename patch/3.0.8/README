@@ -22,4 +22,16 @@ then the file is assumed consist of source language "ecmascript".
 * test-suite/Makefile.am(SCM_TESTS): added tests/load-lang.test
 
 
+=== test-out-of-mem.patch ====================================================
+
+See https://salsa.debian.org/rlb/deb-guile/-/blob/deb/guile-3.0/d/sid/master/
+	debian/patches/
+	0005-Mark-test-out-of-memory-as-an-expected-failure-for-n.patch
+
+
+=== seq-src-fix.patch ========================================================
+
+When compiling to bytecode (-O0) source properties include multiple references
+to start of let.  See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=54478
+
 
