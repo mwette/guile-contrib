@@ -1,5 +1,5 @@
 --- module/system/base/compile.scm.orig	2021-06-16 11:51:51.000000000 -0700
-+++ module/system/base/compile.scm	2022-02-16 05:32:34.322965125 -0800
++++ module/system/base/compile.scm	2022-03-25 06:09:16.018007860 -0700
 @@ -31,7 +31,9 @@
              compile
              decompile
@@ -111,7 +111,7 @@
        (set-port-encoding! in (or enc "UTF-8"))
  
 --- module/scripts/compile.scm.orig	2021-01-07 04:00:46.000000000 -0800
-+++ module/scripts/compile.scm	2022-02-16 05:32:34.322965125 -0800
++++ module/scripts/compile.scm	2022-03-24 05:52:22.732376681 -0700
 @@ -209,7 +209,7 @@
                                     (('optimizations . opts) opts)
                                     (_ '())))
@@ -121,15 +121,16 @@
           (to              (or (assoc-ref options 'to) 'bytecode))
           (target          (or (assoc-ref options 'target) %host-type))
  	 (input-files     (assoc-ref options 'input-files))
---- test-suite/tests/load-lang.test.orig	2022-02-16 05:32:34.322965125 -0800
-+++ test-suite/tests/load-lang.test	2022-02-16 05:32:34.322965125 -0800
-@@ -0,0 +1,37 @@
+--- test-suite/tests/load-lang.test.orig	2022-03-24 05:52:22.732376681 -0700
++++ test-suite/tests/load-lang.test	2022-03-25 06:10:54.407919318 -0700
+@@ -0,0 +1,40 @@
 +;;;; load-lang.test - test loading extension languages	-*- scheme -*-
 +;;;;
 +
 +
 +(define-module (test-suite test-load-lang)
 +  #:use-module (test-suite lib)
++  #:use-module (system base compile)
 +  #:declarative? #f)
 +
 +(define tmp-dir (getcwd))
@@ -145,29 +146,21 @@
 +	(lambda ()
 +	  (display "#lang ecmascript\n")
 +	  (display "function js_1pl(b) { return 1 + b; }\n")))
++      (compile-file src-file)
 +      (load src-file)
-+      ;;(delete-file src-file)
++      (delete-file src-file)
 +      (= (js_1pl 2) 3)))
 +
-+  #;(pass-if "using dot-js"
++  (pass-if "using dot-js"
 +    (let ((src-file (data-file-name "load2.js")))
 +      (with-output-to-file src-file
 +	(lambda ()
 +	  (display "function js_2pl(b) { return 2 + b; }\n")))
++      (compile-file src-file)
 +      (load src-file)
-+      ;;(delete-file src-file)
++      (delete-file src-file)
 +      (= (js_2pl 2) 4)))
 +
 +  )
 +
 +;; --- last line ---
---- test-suite/Makefile.in-orig	2022-02-16 05:33:02.526558986 -0800
-+++ test-suite/Makefile.in	2022-02-16 05:33:17.514334824 -0800
-@@ -1876,6 +1876,7 @@
- 	    tests/keywords.test			\
- 	    tests/list.test			\
- 	    tests/load.test			\
-+	    tests/load-lang.test		\
- 	    tests/match.test			\
- 	    tests/match.test.upstream		\
- 	    tests/modules.test			\
