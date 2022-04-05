@@ -59,7 +59,7 @@
 +(define (add-lang-extension tag lang)
 +  (unless (and (string? tag) (symbol? lang))
 +    (error "expecting string symbol"))
-+  (%file-extension-map (acons tag lang %file-extension-map)))
++  (%file-extension-map (acons tag lang (%file-extension-map))))
 +
 +(define (lang-extension-for tag)
 +  (assoc-ref (%file-extension-map) tag))
