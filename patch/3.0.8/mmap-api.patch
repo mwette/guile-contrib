@@ -1,5 +1,5 @@
 --- configure.orig	2022-02-10 12:03:19.000000000 -0800
-+++ configure	2022-06-21 05:41:06.616384769 -0700
++++ configure	2022-06-21 12:00:18.033430354 -0700
 @@ -2382,6 +2382,7 @@
  enable_networking
  enable_regex
@@ -12,7 +12,7 @@
    --disable-networking    omit networking interfaces
    --disable-regex         omit regular expression interfaces
    --disable-tmpnam        omit POSIX tmpnam
-+  --enable-mmap-api       enable MMAP interface
++  --disable-mmap-api      omit MMAP user API
    --disable-deprecated    omit deprecated features
    --enable-mini-gmp       use mini-gmp instead of the full GMP library
    --disable-nls           do not use Native Language Support
@@ -23,9 +23,9 @@
 +# Check whether --enable-mmap-api was given.
 +if test ${enable_mmap_api+y}
 +then :
-+     enableval=$enable_mmap_api;
++  enableval=$enable_mmap_api;
 +else $as_nop
-+     enable_mmap_api=no
++  enable_mmap_api=yes
 +fi
 +
 +
@@ -38,13 +38,25 @@
  
 +if test "$enable_mmap_api" = yes; then
 +    
-+    printf "%s\n" "#define ENABLE_MMAP_API 1" >>confdefs.h
++printf "%s\n" "#define ENABLE_MMAP_API 1" >>confdefs.h
 +
 +fi
 +
  ac_fn_c_check_func "$LINENO" "strerror" "ac_cv_func_strerror"
  if test "x$ac_cv_func_strerror" = xyes
  then :
+--- config.h.in.orig	2022-06-21 12:03:11.616902397 -0700
++++ config.h.in	2022-06-21 12:05:08.601862120 -0700
+@@ -67,6 +67,9 @@
+ /* Define to 1 if // is a file system root distinct from /. */
+ #undef DOUBLE_SLASH_IS_DISTINCT_ROOT
+ 
++/* Define when MMAP API is enabled. */
++#undef ENABLE_MMAP_API
++
+ /* Define to 1 if JIT compilation is enabled, or 0 otherwise. */
+ #undef ENABLE_JIT
+ 
 --- libguile/filesys.c.orig	2021-05-11 11:54:00.000000000 -0700
 +++ libguile/filesys.c	2022-06-21 05:41:06.620384706 -0700
 @@ -79,11 +79,22 @@
