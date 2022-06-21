@@ -35,3 +35,8 @@ When compiling to bytecode (-O0) source properties include multiple references
 to start of let.  See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=54478
 
 
+=== mmap-api.patch ===========================================================
+
+See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=27782
+
+

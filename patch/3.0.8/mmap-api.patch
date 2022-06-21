@@ -1,0 +1,483 @@
+--- configure.orig	2022-02-10 12:03:19.000000000 -0800
++++ configure	2022-06-21 05:41:06.616384769 -0700
+@@ -2382,6 +2382,7 @@
+ enable_networking
+ enable_regex
+ enable_tmpnam
++enable_mmap_api
+ enable_deprecated
+ with_64_calls
+ with_modules
+@@ -3073,6 +3074,7 @@
+   --disable-networking    omit networking interfaces
+   --disable-regex         omit regular expression interfaces
+   --disable-tmpnam        omit POSIX tmpnam
++  --enable-mmap-api       enable MMAP interface
+   --disable-deprecated    omit deprecated features
+   --enable-mini-gmp       use mini-gmp instead of the full GMP library
+   --disable-nls           do not use Native Language Support
+@@ -53658,6 +53660,15 @@
+ fi
+ 
+ 
++# Check whether --enable-mmap-api was given.
++if test ${enable_mmap_api+y}
++then :
++     enableval=$enable_mmap_api;
++else $as_nop
++     enable_mmap_api=no
++fi
++
++
+ # Check whether --enable-deprecated was given.
+ if test ${enable_deprecated+y}
+ then :
+@@ -60140,6 +60151,12 @@
+ 
+ fi
+ 
++if test "$enable_mmap_api" = yes; then
++    
++    printf "%s\n" "#define ENABLE_MMAP_API 1" >>confdefs.h
++
++fi
++
+ ac_fn_c_check_func "$LINENO" "strerror" "ac_cv_func_strerror"
+ if test "x$ac_cv_func_strerror" = xyes
+ then :
+--- libguile/filesys.c.orig	2021-05-11 11:54:00.000000000 -0700
++++ libguile/filesys.c	2022-06-21 05:41:06.620384706 -0700
+@@ -79,11 +79,22 @@
+ # include <sys/sendfile.h>
+ #endif
+ 
++#ifdef ENABLE_MMAP_API
++#if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MAP_ANONYMOUS)
++#  include <sys/mman.h>
++#  include <sys/stat.h>
++#  include <errno.h>
++#endif
++#endif
++
+ #include "async.h"
+ #include "boolean.h"
++#include "bytevectors.h"                /* mmap */
+ #include "dynwind.h"
+ #include "fdes-finalizers.h"
+ #include "feature.h"
++#include "finalizers.h"                 /* mmap */
++#include "foreign.h"                    /* mmap */
+ #include "fports.h"
+ #include "gsubr.h"
+ #include "iselect.h"
+@@ -1948,6 +1959,314 @@
+ 
+ 
+ 
++#ifdef ENABLE_MMAP_API
++#if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MAP_ANONYMOUS)
++
++/* FiXME
++ * rlb says add msync()
++ * Windows : look for MapViewOfFile
++ */
++
++/* undefined, string or int acceptable */
++static int
++mm_flags (SCM prot, int def)
++{
++  if (SCM_UNBNDP (prot))
++    return def;
++  else
++    scm_misc_error("mmap", "bad prot option", SCM_EOL);
++  return -1;
++}
++
++static int
++mm_prot (SCM prot, int def)
++{
++  if (SCM_UNBNDP (prot))
++    return def;
++  else
++    scm_misc_error("mmap", "bad prot option", SCM_EOL);
++  return -1;
++}
++
++static void
++mmap_finalizer (void *ptr, void *data)
++{
++  SCM bvec;
++  void *c_addr;
++  size_t c_len;
++  int res;
++
++  bvec = SCM_PACK_POINTER (ptr);
++  if (!SCM_BYTEVECTOR_P (bvec))
++    abort();
++  
++  c_addr = SCM_BYTEVECTOR_CONTENTS (bvec);
++  c_len = (size_t) data;
++  res = munmap(c_addr, c_len);
++  if (res != 0)
++    scm_misc_error ("mmap", "failed to munmap memory", SCM_EOL);
++}
++
++SCM_DEFINE (scm_mmap_search, "mmap/search", 2, 4, 0, 
++            (SCM addr, SCM len, SCM prot, SCM flags, SCM fd, SCM offset),
++	    "mmap addr len [prot [flags [fd [offset]]]]"
++	    "See the unix man page for mmap.  Returns a bytevector."
++	    "Note that the region allocated will be searched by the garbage"
++	    "collector for pointers. \n"
++	    "Defaults:\n"
++	    "  prot   (logior PROT_READ PROT_WRITE)\n"
++	    "  flags  (logior MAP_ANON MAP_PRIVATE)\n"
++	    "  fd     -1\n"
++	    "  offset 0\n"
++	    "E.g., @code{(define reg (mmap/search %null-pointer #x1000)}\n")
++#define FUNC_NAME s_scm_mmap_search
++{
++  void *c_mem, *c_addr;
++  size_t c_len;
++  int c_prot, c_flags, c_fd;
++  scm_t_off c_offset;
++  SCM pointer, bvec;
++
++  if (SCM_POINTER_P (addr))
++    c_addr = SCM_POINTER_VALUE (addr);
++  else if (scm_is_integer (addr))
++    c_addr = (void*) scm_to_uintptr_t (addr);
++  else
++    SCM_MISC_ERROR("bad addr", addr);
++
++  c_len = scm_to_size_t (len);
++  
++  if (SCM_UNBNDP (prot))
++    c_prot = PROT_READ | PROT_WRITE;
++  else 
++    c_prot = scm_to_int (prot);
++
++  if (SCM_UNBNDP (flags))
++    c_flags = MAP_ANON | MAP_PRIVATE;
++  else
++    c_flags = scm_to_int (flags);
++
++  if (SCM_UNBNDP (fd))
++    c_fd = -1;
++  else
++    c_fd = scm_to_int (fd);
++
++  if (SCM_UNBNDP (fd))
++    c_offset = 0;
++  else
++    c_offset = scm_to_off_t (offset);
++
++  c_mem = mmap(c_addr, c_len, c_prot, c_flags, c_fd, c_offset);
++  if (c_mem == MAP_FAILED)
++    SCM_SYSERROR;			/* errno set */
++
++  pointer = scm_cell (scm_tc7_pointer, (scm_t_bits) c_mem);
++  bvec = scm_c_take_typed_bytevector((signed char *) c_mem + c_offset, c_len,
++				     SCM_ARRAY_ELEMENT_TYPE_VU8, pointer);
++  assert(sizeof(void*) <= sizeof(size_t));
++  scm_i_set_finalizer (SCM2PTR (bvec), mmap_finalizer, (void*) c_len);
++  return bvec;
++}
++#undef FUNC_NAME
++
++SCM_DEFINE (scm_mmap, "mmap", 2, 4, 0, 
++            (SCM addr, SCM len, SCM prot, SCM flags, SCM fd, SCM offset),
++	    "mmap addr len [prot [flags [fd [offset]]]]"
++	    "See the man page.  Returns a bytevector."
++	    "Note that the region returned by mmap will NOT be searched "
++	    "by the garbage collector for pointers.\n"
++	    "Defaults:\n"
++	    "  PROT   (logior PROT_READ PROT_WRITE)\n"
++	    "  FLAGS  (logior MAP_ANON MAP_PRIVATE)\n"
++	    "  FD     -1\n"
++	    "  OFFSET 0\n"
++	    "@example\n"
++	    "(define bvec-1MB (mmap 0 #x100000)\n"
++	    "@end example"
++	    )
++#define FUNC_NAME s_scm_mmap
++{
++  void *c_mem;
++  size_t c_len;
++  SCM bvec;
++
++  bvec = scm_mmap_search(addr, len, prot, flags, fd, offset);
++  c_mem = SCM_BYTEVECTOR_CONTENTS(bvec);
++  c_len = SCM_BYTEVECTOR_LENGTH(bvec);
++
++  /* Tell GC not to scan for pointers. */
++  GC_exclude_static_roots(c_mem, (char*) c_mem + c_len);
++
++  return bvec;
++}
++#undef FUNC_NAME
++
++
++// call fstat to get file size
++SCM_DEFINE (scm_mmap_file, "mmap-file", 1, 1, 0, 
++            (SCM file, SCM prot),
++	    "This procedure accepts a file in the form of filename,"
++            " file-port or fd.  It returns a bytevector.  It must not"
++            " contain scheme allocated objects as it will not be"
++            " searched for pointers.\n"
++	    "Defaults:\n"
++	    "  prot   \"r\"\n"
++	    "E.g., @code{(define bvec-1MB (mmap-file \"foo.dat\")}")
++#define FUNC_NAME s_scm_mmap_file
++{
++  int fd, flags, prot_;
++  int fd_is_local = 0;
++  struct stat sb;
++  off_t size;
++  void *ptr;
++  size_t len;
++  char *filename;
++  SCM pointer, bvec;
++
++  if (scm_is_string (file)) {
++    scm_dynwind_begin (0);
++    filename = scm_to_locale_string (file);
++    scm_dynwind_free (filename);
++    flags = mm_flags(prot, O_RDONLY);
++    prot_ = mm_prot(prot, PROT_READ);
++    fd = open(filename, flags);
++    if (fd == -1)
++      scm_misc_error ("mmap-file", "could not open file ~S", scm_list_1(file));
++    fd_is_local = 1;
++  } else if (SCM_PORTP (file)) {
++    if (! SCM_UNBNDP (prot))
++      scm_misc_error ("mmap-file", "file open, prot arg not allowed", SCM_EOL);
++    if (SCM_PORT_TYPE (file) != scm_file_port_type)
++      scm_misc_error ("mmap-file", "port is not file port", SCM_EOL);
++    fd = SCM_FPORT_FDES (file);
++    if (scm_input_port_p (file)) {
++      if (scm_output_port_p (file)) {
++        flags = O_RDWR;
++        prot_ = PROT_READ | PROT_WRITE;
++      } else {
++        flags = O_RDONLY;
++        prot_ = PROT_READ;
++      }
++    } else if (scm_output_port_p (file)) {
++      flags = O_WRONLY;
++      prot_ = PROT_WRITE;
++    } else {                            /* not read, not write */
++      abort();
++    }
++  } else if (scm_is_integer (file)) {
++    fd = scm_to_signed_integer (file, 0, 1024); /* FIXME: what for 1024? */
++    /* I think fstat() may tell us if the FD is RD,WR,RDWR. */
++    flags = O_RDONLY;
++    prot_ = PROT_READ;
++  } else {
++    scm_misc_error ("mmap-file", "bad arg for file", SCM_EOL);
++  }
++  fstat(fd, &sb);
++  size = sb.st_size;
++  ptr = mmap(0, size, prot_, MAP_PRIVATE, fd, 0);
++  len = (size_t) size;
++  if (fd_is_local) close(fd);
++  
++  if (ptr == MAP_FAILED)
++    SCM_SYSERROR;			/* errno set */
++
++  pointer = scm_cell (scm_tc7_pointer, (scm_t_bits) ptr);
++  bvec = scm_c_take_typed_bytevector((signed char *) ptr, len,
++				     SCM_ARRAY_ELEMENT_TYPE_VU8, pointer);
++
++  assert(sizeof(void*) <= sizeof(size_t));
++  scm_i_set_finalizer (SCM2PTR (bvec), mmap_finalizer, (void*) len);
++
++  /* Tell GC not to scan for pointers. */
++  GC_exclude_static_roots(ptr, (char*)ptr + len);
++
++  return bvec;
++}
++#undef FUNC_NAME
++
++/* The following copied from bytevectors.c. Kludge? */
++#define SCM_BYTEVECTOR_SET_LENGTH(_bv, _len)            \
++  SCM_SET_CELL_WORD_1 ((_bv), (scm_t_bits) (_len))
++#define SCM_BYTEVECTOR_SET_CONTENTS(_bv, _contents)	\
++  SCM_SET_CELL_WORD_2 ((_bv), (scm_t_bits) (_contents))
++
++SCM_DEFINE (scm_munmap, "munmap", 1, 0, 0, 
++            (SCM bvec),
++	    "See the man page. Given bytevector generated by a mmap"
++            " function, unmap the associated memory.  The argument"
++            " will be modified to reflect a zero length bv.")
++#define FUNC_NAME s_scm_munmap
++{
++  void *addr;
++  size_t len;
++  int res;
++
++  SCM_VALIDATE_BYTEVECTOR (1, bvec);
++  
++  addr = (void *) SCM_BYTEVECTOR_CONTENTS (bvec);
++  len = SCM_BYTEVECTOR_LENGTH (bvec);
++
++  /* Invalidate further work on this bytevector. */
++  SCM_BYTEVECTOR_SET_LENGTH (bvec, 0);
++  SCM_BYTEVECTOR_SET_CONTENTS (bvec, NULL);
++
++  res = munmap(addr, len);
++  if (res == -1)
++    SCM_SYSERROR;			/* errno set */
++
++  return SCM_UNSPECIFIED;
++}
++#undef FUNC_NAME
++
++static void init_mmap_api(void) {
++  scm_add_feature("mmap-api");
++  scm_add_feature("mmap-file");
++
++#ifdef PROT_NONE
++  scm_c_define ("PROT_NONE", scm_from_int (PROT_NONE));
++#endif
++#ifdef PROT_READ
++  scm_c_define ("PROT_READ", scm_from_int (PROT_READ));
++#endif
++#ifdef PROT_WRITE
++  scm_c_define ("PROT_WRITE", scm_from_int (PROT_WRITE));
++#endif
++#ifdef PROT_EXEC
++  scm_c_define ("PROT_EXEC", scm_from_int (PROT_EXEC));
++#endif
++
++#ifdef MAP_ANONYMOUS
++  scm_c_define ("MAP_ANONYMOUS", scm_from_int (MAP_ANONYMOUS));
++#endif
++#ifdef MAP_ANON
++  scm_c_define ("MAP_ANON", scm_from_int (MAP_ANON));
++#endif
++#ifdef MAP_FILE
++  scm_c_define ("MAP_FILE", scm_from_int (MAP_FILE));
++#endif
++#ifdef MAP_FIXED
++  scm_c_define ("MAP_FIXED", scm_from_int (MAP_FIXED));
++#endif
++#ifdef MAP_HASSEMAPHORE
++  scm_c_define ("MAP_HASSEMAPHORE", scm_from_int (MAP_HASSEMAPHORE));
++#endif
++#ifdef MAP_PRIVATE
++  scm_c_define ("MAP_PRIVATE", scm_from_int (MAP_PRIVATE));
++#endif
++#ifdef MAP_SHARED
++  scm_c_define ("MAP_SHARED", scm_from_int (MAP_SHARED));
++#endif
++#ifdef MAP_NOCACHE
++  scm_c_define ("MAP_NOCACHE", scm_from_int (MAP_NOCACHE));
++#endif
++  scm_c_define ("PAGE_SIZE", scm_from_int (getpagesize()));
++}
++
++#endif /* HAVE_SYS_MMAN_H && HAVE_MMAP_ANONYMOUS */
++#endif /* ENABLE_MMAP_API */
++
++
++
+ void
+ scm_init_filesys ()
+ {
+@@ -2058,6 +2377,10 @@
+ #endif
+ #endif /* HAVE_POSIX */
+ 
++#ifdef ENABLE_MMAP_API
++  init_mmap_api();
++#endif /* ENABLE_MMAP_API */
++  
+   /* `access' symbols.  */
+   scm_c_define ("R_OK", scm_from_int (R_OK));
+   scm_c_define ("W_OK", scm_from_int (W_OK));
+--- libguile/filesys.h.orig	2021-02-03 14:00:27.000000000 -0800
++++ libguile/filesys.h	2022-06-21 05:41:06.620384706 -0700
+@@ -71,6 +71,10 @@
+ SCM_API SCM scm_basename (SCM filename, SCM suffix);
+ SCM_API SCM scm_canonicalize_path (SCM path);
+ SCM_API SCM scm_sendfile (SCM out, SCM in, SCM count, SCM offset);
++SCM_API SCM scm_mmap_search(SCM addr, SCM len, SCM prot, SCM flags, SCM fd, SCM offset);
++SCM_API SCM scm_mmap(SCM addr, SCM len, SCM prot, SCM flags, SCM fd, SCM offset);
++SCM_API SCM scm_mmap_file(SCM file, SCM prot);
++SCM_API SCM scm_munmap(SCM bvec);
+ SCM_INTERNAL SCM scm_i_relativize_path (SCM path, SCM in_path);
+ 
+ SCM_INTERNAL void scm_init_filesys (void);
+--- test-suite/Makefile.in.orig	2022-02-10 12:03:23.000000000 -0800
++++ test-suite/Makefile.in	2022-06-21 09:13:42.876844961 -0700
+@@ -1878,6 +1878,7 @@
+ 	    tests/load.test			\
+ 	    tests/match.test			\
+ 	    tests/match.test.upstream		\
++	    tests/mmap-api.test			\
+ 	    tests/modules.test			\
+ 	    tests/multilingual.nottest		\
+ 	    tests/net-db.test			\
+--- test-suite/tests/mmap-api.test.orig	2022-06-21 05:41:06.620384706 -0700
++++ test-suite/tests/mmap-api.test	2022-06-21 05:41:06.620384706 -0700
+@@ -0,0 +1,59 @@
++;;;; mmap-api.test --- Tests for Guile threading.    -*- scheme -*-
++;;;;
++;;;; Copyright 2020 Free Software Foundation, Inc.
++;;;;
++;;;; This library is free software; you can redistribute it and/or
++;;;; modify it under the terms of the GNU Lesser General Public
++;;;; License as published by the Free Software Foundation; either
++;;;; version 3 of the License, or (at your option) any later version.
++;;;; 
++;;;; This library is distributed in the hope that it will be useful,
++;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
++;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++;;;; Lesser General Public License for more details.
++;;;; 
++;;;; You should have received a copy of the GNU Lesser General Public
++;;;; License along with this library; if not, write to the Free Software
++;;;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++
++(define-module (test-mmap-api)
++  #:use-module (test-suite lib)
++  #:use-module (test-suite guile-test)
++  #:use-module (rnrs bytevectors)
++  )
++
++(define (mmap-test-file)
++  (data-file-name "foo.txt"))
++
++(define mmap-test-string "hello, world")
++
++(define (gen-mmap-test-file)
++  (with-output-to-file (mmap-test-file)
++    (lambda () (display mmap-test-string))))
++
++(when (provided? 'mmap-file)
++
++  (gen-mmap-test-file)
++
++  (with-test-prefix "mmap-file"
++      
++    (pass-if "mmap-file 1"
++      (let ((bv (mmap-file (mmap-test-file))))
++        (string=? (utf8->string bv) mmap-test-string)))
++
++    ))
++
++(when (provided? 'mmap-api)
++
++  (gen-mmap-test-file)
++
++  (with-test-prefix "mmap-api"
++      
++    (pass-if "mmap-api 1"
++      (let ((bv (mmap 0 #x100)))
++        (bytevector-u8-set! bv 0 34)
++        (= (bytevector-u8-ref bv 0) 34)))
++
++    ))
++
++;; --- last line ---
