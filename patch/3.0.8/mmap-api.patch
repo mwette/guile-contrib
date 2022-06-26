@@ -1,5 +1,5 @@
---- configure.orig	2022-02-10 12:03:19.000000000 -0800
-+++ configure	2022-06-21 12:25:54.381639063 -0700
+--- configure.orig
++++ configure
 @@ -2382,6 +2382,7 @@
  enable_networking
  enable_regex
@@ -45,8 +45,8 @@
  ac_fn_c_check_func "$LINENO" "strerror" "ac_cv_func_strerror"
  if test "x$ac_cv_func_strerror" = xyes
  then :
---- config.h.in.orig	2022-02-10 12:03:20.000000000 -0800
-+++ config.h.in	2022-06-21 12:25:54.381639063 -0700
+--- config.h.in.orig
++++ config.h.in
 @@ -67,6 +67,9 @@
  /* Define to 1 if // is a file system root distinct from /. */
  #undef DOUBLE_SLASH_IS_DISTINCT_ROOT
@@ -57,8 +57,8 @@
  /* Define to 1 if JIT compilation is enabled, or 0 otherwise. */
  #undef ENABLE_JIT
  
---- libguile/filesys.c.orig	2021-05-11 11:54:00.000000000 -0700
-+++ libguile/filesys.c	2022-06-26 06:31:47.721289206 -0700
+--- libguile/filesys.c.orig
++++ libguile/filesys.c
 @@ -79,11 +79,22 @@
  # include <sys/sendfile.h>
  #endif
@@ -82,7 +82,7 @@
  #include "fports.h"
  #include "gsubr.h"
  #include "iselect.h"
-@@ -1948,6 +1959,307 @@
+@@ -1948,6 +1959,309 @@
  
  
  
@@ -382,6 +382,8 @@
 +  scm_c_define ("PAGE_SIZE", scm_from_int (getpagesize()));
 +}
 +
++#else
++static void init_mmap_api(void) { }
 +#endif /* HAVE_SYS_MMAN_H && HAVE_MMAP_ANONYMOUS */
 +#endif /* ENABLE_MMAP_API */
 +
@@ -390,7 +392,7 @@
  void
  scm_init_filesys ()
  {
-@@ -2058,6 +2370,10 @@
+@@ -2058,6 +2372,10 @@
  #endif
  #endif /* HAVE_POSIX */
  
@@ -401,8 +403,8 @@
    /* `access' symbols.  */
    scm_c_define ("R_OK", scm_from_int (R_OK));
    scm_c_define ("W_OK", scm_from_int (W_OK));
---- libguile/filesys.h.orig	2021-02-03 14:00:27.000000000 -0800
-+++ libguile/filesys.h	2022-06-21 12:25:54.381639063 -0700
+--- libguile/filesys.h.orig
++++ libguile/filesys.h
 @@ -71,6 +71,10 @@
  SCM_API SCM scm_basename (SCM filename, SCM suffix);
  SCM_API SCM scm_canonicalize_path (SCM path);
@@ -414,8 +416,8 @@
  SCM_INTERNAL SCM scm_i_relativize_path (SCM path, SCM in_path);
  
  SCM_INTERNAL void scm_init_filesys (void);
---- test-suite/Makefile.in.orig	2022-02-10 12:03:23.000000000 -0800
-+++ test-suite/Makefile.in	2022-06-21 12:25:54.381639063 -0700
+--- test-suite/Makefile.in.orig
++++ test-suite/Makefile.in
 @@ -1878,6 +1878,7 @@
  	    tests/load.test			\
  	    tests/match.test			\
@@ -424,8 +426,8 @@
  	    tests/modules.test			\
  	    tests/multilingual.nottest		\
  	    tests/net-db.test			\
---- test-suite/tests/mmap-api.test.orig	2022-06-21 12:25:54.381639063 -0700
-+++ test-suite/tests/mmap-api.test	2022-06-21 12:25:54.381639063 -0700
+--- test-suite/tests/mmap-api.test.orig
++++ test-suite/tests/mmap-api.test
 @@ -0,0 +1,59 @@
 +;;;; mmap-api.test --- Tests for Guile threading.    -*- scheme -*-
 +;;;;
