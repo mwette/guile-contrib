@@ -1,6 +1,6 @@
 ;;; struct.scm - byte pack/unpack, like the Python struct module
 ;;;
-;;; Copyright (C) 2016 Matthew R. Wette
+;;; Copyright (C) 2016,2022 Matthew R. Wette
 ;;;
 ;;; This library is free software; you can redistribute it and/or
 ;;; modify it under the terms of the GNU Lesser General Public
@@ -59,10 +59,10 @@
   (case ch
     ((#\x) (if #f #f))
     ((#\c) ;; todo: check for 8-bit char
-     (bytevector-u8-set! bv ix (char->integer val) nd))
+     (bytevector-u8-set! bv ix (char->integer val)))
     ((#\b) (bytevector-s8-set! bv ix val))
     ((#\B) (bytevector-u8-set! bv ix val))
-    ((#\?) (bytevector-u8-set! bv ix (if val 1 0) nd))
+    ((#\?) (bytevector-u8-set! bv ix (if val 1 0)))
     ((#\h) (bytevector-s16-set! bv ix val nd))
     ((#\H) (bytevector-u16-set! bv ix val nd))
     ((#\i #\l) (bytevector-s32-set! bv ix val nd))
@@ -73,7 +73,8 @@
     ((#\d) (bytevector-ieee-double-set! bv ix val nd))
     ((#\s #\p)
      (bytevector-copy!
-      (u8-list->bytevector (map char->integer (string->list val))) 0 bv ix sz))
+      (u8-list->bytevector (map char->integer (string->list val)))
+      0 bv ix (string-length val)))
     (else
      (scm-error 'misc-error "unpack"
 		"bad type code: ~A" '(ch) #f))))
