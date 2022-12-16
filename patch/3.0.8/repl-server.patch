@@ -1,0 +1,19 @@
+--- module/system/repl/server.scm-orig	2022-12-16 14:10:44.412078222 -0800
++++ module/system/repl/server.scm	2022-12-16 14:10:01.405125365 -0800
+@@ -147,6 +147,7 @@
+ 
+   (dynamic-wind
+     (lambda () #f)
++     (lambda ()
+     (with-continuation-barrier
+      (lambda ()
+        (parameterize ((current-input-port client)
+@@ -154,7 +155,7 @@
+                       (current-error-port client)
+                       (current-warning-port client))
+          (with-fluids ((*repl-stack* '()))
+-           (start-repl)))))
++           (start-repl))))))
+     (lambda () (close-socket! client))))
+ 
+ 
