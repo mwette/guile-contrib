@@ -1,19 +1,26 @@
---- module/system/repl/server.scm-orig	2022-12-16 14:10:44.412078222 -0800
-+++ module/system/repl/server.scm	2022-12-16 14:10:01.405125365 -0800
-@@ -147,6 +147,7 @@
+--- module/system/repl/server.scm.orig	2021-01-12 03:16:21.000000000 -0800
++++ module/system/repl/server.scm	2022-12-16 14:24:12.197264252 -0800
+@@ -147,14 +147,15 @@
  
    (dynamic-wind
      (lambda () #f)
-+     (lambda ()
-     (with-continuation-barrier
-      (lambda ()
-        (parameterize ((current-input-port client)
-@@ -154,7 +155,7 @@
-                       (current-error-port client)
-                       (current-warning-port client))
-          (with-fluids ((*repl-stack* '()))
+-    (with-continuation-barrier
+-     (lambda ()
+-       (parameterize ((current-input-port client)
+-                      (current-output-port client)
+-                      (current-error-port client)
+-                      (current-warning-port client))
+-         (with-fluids ((*repl-stack* '()))
 -           (start-repl)))))
-+           (start-repl))))))
++    (lambda ()
++      (with-continuation-barrier
++       (lambda ()
++         (parameterize ((current-input-port client)
++                        (current-output-port client)
++                        (current-error-port client)
++                        (current-warning-port client))
++           (with-fluids ((*repl-stack* '()))
++             (start-repl))))))
      (lambda () (close-socket! client))))
  
  
