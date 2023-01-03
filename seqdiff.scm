@@ -1,6 +1,6 @@
 ;; seqdiff.scm - generate sequence diff
 ;;
-;; Copyright (C) 2020 Matthew R. Wette
+;; Copyright (C) 2020,2023 Matthew R. Wette
 ;;
 ;; This library is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU Lesser General Public
@@ -8,8 +8,10 @@
 ;; version 3 of the License, or (at your option) any later version.
 ;; This software is reserved for personal use by the copyright holder.
 
+;; This code is derived from Python's difflib.
+
 (define-module (seqdiff)
-  #:export (sequence-diff string-diff make-seq-rout str-procs)
+  #:export (sequence-diff string-diff make-seq-procs str-procs)
   #:use-module (srfi srfi-9))
 
 (define-record-type seq-procs
@@ -19,8 +21,7 @@
   (seq-ref seq-ref-proc)
   (elt-eq? elt-eq?-proc)
   (seq-href seq-href-proc)
-  (seq-hset! seq-hset!-proc)
-  )
+  (seq-hset! seq-hset!-proc))
 
 ;; junk? is predicate taking elt
 (define* (sequence-diff a b procs #:optional junk?)
