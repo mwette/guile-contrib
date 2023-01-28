@@ -82,22 +82,22 @@
      (scm-error 'misc-error "unpack"
 		"bad type code: ~A" '(ch) #f))))
 
-;; @deffn pack format datum ... => bytevector
-;; Pack the @var{datum ...} into a bytevector according to characters
-;; in @var{FORMAT}.  For example, 
+;; @deffn {Scheme} pack format datum ... => bytevector
+;; Like @code{struct.pack} from Python.  Pack the @var{datum ...} into a
+;; bytevector according to characters in @var{FORMAT}.  For example, 
 ;; @example
 ;; (pack "2Hd" 3 22 34.0) => #vu8(3 0 22 0 0 0 0 0 0 0 65 64)
 ;; @end example
 ;; In the above, the format characters indicate two unsigned short,
-;; one double.
+;; one double.  See the struct documentation for more detail.
 ;; @end deffn
 (define (pack format . args)
-  "- pack: format datum ... => bytevector
-     Pack the DATUM ... into a bytevector according to characters in
-     FORMAT.  For example,
+  "- Scheme: pack format datum ... => bytevector
+     Like 'struct.pack' from Python.  Pack the DATUM ... into a
+     bytevector according to characters in FORMAT.  For example,
           (pack \"2Hd\" 3 22 34.0) => #vu8(3 0 22 0 0 0 0 0 0 0 65 64)
      In the above, the format characters indicate two unsigned short,
-     one double."
+     one double.  See the struct documentation for more detail."
   (cond
    ((zero? (string-length format)) (make-bytevector 0))
    (else
@@ -169,22 +169,22 @@
 	 (scm-error 'misc-error "unpack"
 		    "bad type code: ~A" '(ch) #f))))))
 
-;; @deffn unpack format bv => list
-;; Unpack the bytevector @var{bv} list according to the characters
-;; in @var{FORMAT}.  For example, 
+;; @deffn {Scheme} unpack format bv => list
+;; Like @code{struct.unpack} from Python.  Unpack the bytevector @var{bv} list
+;; according to the characters in @var{FORMAT}.  For example, 
 ;; @example
 ;; (unpack "2Hd" #vu8(3 0 22 0 0 0 0 0 0 0 65 64)) => (3 22 34.0)
 ;; @end example
 ;; In the above, the format characters indicate two unsigned short,
-;; one double.
+;; one double.  See the struct documentation for more detail.
 ;; @end deffn
 (define (unpack format bytevec)
-  "- unpack: format bv => list
-     Unpack the bytevector BV list according to the characters in
-     FORMAT.  For example,
+  "- Scheme: unpack format bv => list
+     Like 'struct.unpack' from Python.  Unpack the bytevector BV list
+     according to the characters in FORMAT.  For example,
           (unpack \"2Hd\" #vu8(3 0 22 0 0 0 0 0 0 0 65 64)) => (3 22 34.0)
      In the above, the format characters indicate two unsigned short,
-     one double."
+     one double.  See the struct documentation for more detail."
   (cond
    ((zero? (string-length format)) '())
    (else
