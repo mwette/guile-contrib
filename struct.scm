@@ -1,6 +1,6 @@
 ;;; struct.scm - byte pack/unpack, like the Python struct module
 ;;;
-;;; Copyright (C) 2016,2022 Matthew R. Wette
+;;; Copyright (C) 2016,2022,2023 Matthew R. Wette
 ;;;
 ;;; This library is free software; you can redistribute it and/or
 ;;; modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,7 @@
 
 ;; @deffn ctoi-at str ix => integer
 ;; Return integer value of the character in string @var{str} at index @var{ix}.
+;; @end deffn
 (define (ctoi-at str ix) (- (char->integer (string-ref str ix)) 48))
 
 ;; character codes used to indicate endianness:
@@ -21,6 +22,7 @@
 
 ;; @deffn get-nd code => endianness
 ;; Return endianness given the character code @var{code}.
+;; @end deffn
 (define (get-nd code)
   (case code
     ((#\!) (endianness big))		; network
@@ -38,6 +40,7 @@
 ;; @example
 ;; (get-size 12 #\s) => 12
 ;; (get-size 12 #\i) => 4
+;; @end deffn
 (define (bv-size ct ch)
   (case ch
     ((#\x) 1) ((#\c) 1) ((#\b) 1) ((#\B) 1) ((#\?) 1)
@@ -80,8 +83,21 @@
 		"bad type code: ~A" '(ch) #f))))
 
 ;; @deffn pack format datum ... => bytevector
-;; Pack the datums into a bytevector.
+;; Pack the @var{datum ...} into a bytevector according to characters
+;; in @var{FORMAT}.  For example, 
+;; @example
+;; (pack "2Hd" 3 22 34.0) => #vu8(3 0 22 0 0 0 0 0 0 0 65 64)
+;; @end example
+;; In the above, the format characters indicate two unsigned short,
+;; one double.
+;; @end deffn
 (define (pack format . args)
+  "- pack: format datum ... => bytevector
+     Pack the DATUM ... into a bytevector according to characters in
+     FORMAT.  For example,
+          (pack \"2Hd\" 3 22 34.0) => #vu8(3 0 22 0 0 0 0 0 0 0 65 64)
+     In the above, the format characters indicate two unsigned short,
+     one double."
   (cond
    ((zero? (string-length format)) (make-bytevector 0))
    (else
@@ -153,9 +169,22 @@
 	 (scm-error 'misc-error "unpack"
 		    "bad type code: ~A" '(ch) #f))))))
 
-;; @deffn unpack format bytevec => list
-;; Unpack datums from the bytevector into a list.
+;; @deffn unpack format bv => list
+;; Unpack the bytevector @var{bv} list according to the characters
+;; in @var{FORMAT}.  For example, 
+;; @example
+;; (unpack "2Hd" #vu8(3 0 22 0 0 0 0 0 0 0 65 64)) => (3 22 34.0)
+;; @end example
+;; In the above, the format characters indicate two unsigned short,
+;; one double.
+;; @end deffn
 (define (unpack format bytevec)
+  "- unpack: format bv => list
+     Unpack the bytevector BV list according to the characters in
+     FORMAT.  For example,
+          (unpack \"2Hd\" #vu8(3 0 22 0 0 0 0 0 0 0 65 64)) => (3 22 34.0)
+     In the above, the format characters indicate two unsigned short,
+     one double."
   (cond
    ((zero? (string-length format)) '())
    (else
