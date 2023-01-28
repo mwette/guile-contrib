@@ -8,21 +8,20 @@
 ;;; version 3 of the License, or (at your option) any later version.
 
 (define-module (struct)
-  #:export (unpack pack packed-size)
+  #:export (packed-size pack unpack)
   #:use-module (rnrs bytevectors))
 
-
-;; @deffn ctoi-at str ix => integer
-;; Return integer value of the character in string @var{str} at index @var{ix}.
-;; @end deffn
-(define (ctoi-at str ix) (- (char->integer (string-ref str ix)) 48))
 
 ;; character codes used to indicate endianness:
 (define cs:md (string->char-set "=<>!"))
 
-;; @deffn get-nd code => endianness
+;; character codes used to indicate type:
+(define cs:df (string->char-set "xcbB?hHiIlLqQfdsp")) ; type char
+
+;; Return integer value of the character in string @var{str} at index @var{ix}.
+(define (ctoi-at str ix) (- (char->integer (string-ref str ix)) 48))
+
 ;; Return endianness given the character code @var{code}.
-;; @end deffn
 (define (get-nd code)
   (case code
     ((#\!) (endianness big))		; network
@@ -32,15 +31,11 @@
     ((#\@) (error "alignment not supported"))
     (else  (native-endianness))))
 
-;; character codes used to indicate type:
-(define cs:df (string->char-set "xcbB?hHiIlLqQfdsp")) ; type char
-
-;; @deffn bv-size ct ch => byte count
 ;; Return the size in bytes for data indicated by format count and type.
 ;; @example
 ;; (get-size 12 #\s) => 12
 ;; (get-size 12 #\i) => 4
-;; @end deffn
+;; @end example
 (define (bv-size ct ch)
   (case ch
     ((#\x) 1) ((#\c) 1) ((#\b) 1) ((#\B) 1) ((#\?) 1)
@@ -48,7 +43,6 @@
     ((#\q) 8) ((#\Q) 8) ((#\f) 4) ((#\d) 8) ((#\s #\p) ct)
     (else (error "unknown code"))))
 
-;; @deffn fmt-cnt ct ch => datum count
 ;; Return the number of datums indicated by the format count and type.
 (define (fmt-cnt ct ch)
   (case ch
@@ -56,8 +50,7 @@
     (else 1)))
   
 
-;; set value, return number bytes written
-;; This is a helper for @code{pack}.
+;; This is a helper for pack. Set the bv value, return number bytes written.
 (define (set-value! bv ix nd ct ch val)
   (case ch
     ((#\x) (if #f #f))
@@ -82,6 +75,67 @@
      (scm-error 'misc-error "unpack"
 		"bad type code: ~A" '(ch) #f))))
 
+;; @deffn cons-value bv ix nd cd tail => list
+;; Cons the datum indicated by the data with @var{tail}, where
+;; @itemize
+;; @item @var{bv} is the bytevector
+;; @item @var{ix} is the index into the bytevector
+;; @item @var{nd} is the endianness
+;; @item @var{cd} is the code
+;; @end itemize
+;; This is a helper for @code{unpack}.
+;; @end deffn
+(define cons-value
+  (let ((sbuf (make-bytevector 128)))
+    (lambda (bv ix nd sz ch tail)
+      (case ch
+	((#\x) tail)
+	((#\c) (cons (integer->char (bytevector-u8-ref bv ix)) tail))
+	((#\b) (cons (bytevector-s8-ref bv ix) tail))
+	((#\B) (cons (bytevector-u8-ref bv ix) tail))
+	((#\?) (cons (if (zero? (bytevector-u8-ref bv ix)) #f #t) tail))
+	((#\h) (cons (bytevector-s16-ref bv ix nd) tail))
+	((#\H) (cons (bytevector-u16-ref bv ix nd) tail))
+	((#\i) (cons (bytevector-s32-ref bv ix nd) tail))
+	((#\I) (cons (bytevector-u32-ref bv ix nd) tail))
+	((#\l) (cons (bytevector-s32-ref bv ix nd) tail))
+	((#\L) (cons (bytevector-u32-ref bv ix nd) tail))
+	((#\q) (cons (bytevector-s64-ref bv ix nd) tail))
+	((#\Q) (cons (bytevector-u64-ref bv ix nd) tail))
+	((#\f) (cons (bytevector-ieee-single-ref bv ix nd) tail))
+	((#\d) (cons (bytevector-ieee-double-ref bv ix nd) tail))
+	((#\s #\p)
+	 (set! sbuf (make-bytevector sz))
+	 (bytevector-copy! bv ix sbuf 0 sz)
+	 (cons (utf8->string sbuf) tail))
+	(else
+	 (scm-error 'misc-error "unpack"
+		    "bad type code: ~A" '(ch) #f))))))
+
+
+;; @deffn packed-size format => size
+;; In the Python struct module this is called "calcsize".
+;; @end deffn
+(define (packed-size format)
+  (cond
+   ((zero? (string-length format)) 0)
+   (else
+    (let* ((char-at (lambda (ix) (string-ref format ix)))
+	   (f0 (if (char-set-contains? cs:md (char-at 0)) 1 0))
+	   (ln (string-length format)))
+      (let iter ((sz 0) (fx f0) (ct 0))	; sz: result, fx: inddx; ct: count
+	(cond
+	 ((= fx ln)
+	  sz)
+	 ((char-numeric? (string-ref format fx))
+	  (iter sz (1+ fx) (+ (* 10 ct) (ctoi-at format fx))))
+	 ((zero? ct)
+	  (iter sz fx 1))
+	 ((char-set-contains? cs:df (string-ref format fx))
+	  (iter (+ sz (* ct (bv-size 1 (string-ref format fx)))) (1+ fx) 0))
+	 (else
+	  (scm-error 'misc-error "unpack" "format error" '() #f))))))))
+  
 ;; @deffn {Scheme} pack format datum ... => bytevector
 ;; Like @code{struct.pack} from Python.  Pack the @var{datum ...} into a
 ;; bytevector according to characters in @var{FORMAT}.  For example, 
@@ -132,43 +186,6 @@
 	  (scm-error 'misc-error "pack"
 		     "pack error" '() #f))))))))
 
-
-;; @deffn cons-value bv ix nd cd tail => list
-;; Cons the datum indicated by the data with @var{tail}, where
-;; @itemize
-;; @item @var{bv} is the bytevector
-;; @item @var{ix} is the index into the bytevector
-;; @item @var{nd} is the endianness
-;; @item @var{cd} is the code
-;; @end itemize
-;; This is a helper for @code{unpack}.
-(define cons-value
-  (let ((sbuf (make-bytevector 128)))
-    (lambda (bv ix nd sz ch tail)
-      (case ch
-	((#\x) tail)
-	((#\c) (cons (integer->char (bytevector-u8-ref bv ix)) tail))
-	((#\b) (cons (bytevector-s8-ref bv ix) tail))
-	((#\B) (cons (bytevector-u8-ref bv ix) tail))
-	((#\?) (cons (if (zero? (bytevector-u8-ref bv ix)) #f #t) tail))
-	((#\h) (cons (bytevector-s16-ref bv ix nd) tail))
-	((#\H) (cons (bytevector-u16-ref bv ix nd) tail))
-	((#\i) (cons (bytevector-s32-ref bv ix nd) tail))
-	((#\I) (cons (bytevector-u32-ref bv ix nd) tail))
-	((#\l) (cons (bytevector-s32-ref bv ix nd) tail))
-	((#\L) (cons (bytevector-u32-ref bv ix nd) tail))
-	((#\q) (cons (bytevector-s64-ref bv ix nd) tail))
-	((#\Q) (cons (bytevector-u64-ref bv ix nd) tail))
-	((#\f) (cons (bytevector-ieee-single-ref bv ix nd) tail))
-	((#\d) (cons (bytevector-ieee-double-ref bv ix nd) tail))
-	((#\s #\p)
-	 (set! sbuf (make-bytevector sz))
-	 (bytevector-copy! bv ix sbuf 0 sz)
-	 (cons (utf8->string sbuf) tail))
-	(else
-	 (scm-error 'misc-error "unpack"
-		    "bad type code: ~A" '(ch) #f))))))
-
 ;; @deffn {Scheme} unpack format bv => list
 ;; Like @code{struct.unpack} from Python.  Unpack the bytevector @var{bv} list
 ;; according to the characters in @var{FORMAT}.  For example, 
@@ -217,26 +234,4 @@
 	  (scm-error 'misc-error "unpack" "format error" '() #f))))))))
 
 
-;; @deffn packed-size format => size
-;; In the Python struct module this is called "calcsize".
-(define (packed-size format)
-  (cond
-   ((zero? (string-length format)) 0)
-   (else
-    (let* ((char-at (lambda (ix) (string-ref format ix)))
-	   (f0 (if (char-set-contains? cs:md (char-at 0)) 1 0))
-	   (ln (string-length format)))
-      (let iter ((sz 0) (fx f0) (ct 0))	; sz: result, fx: inddx; ct: count
-	(cond
-	 ((= fx ln)
-	  sz)
-	 ((char-numeric? (string-ref format fx))
-	  (iter sz (1+ fx) (+ (* 10 ct) (ctoi-at format fx))))
-	 ((zero? ct)
-	  (iter sz fx 1))
-	 ((char-set-contains? cs:df (string-ref format fx))
-	  (iter (+ sz (* ct (bv-size 1 (string-ref format fx)))) (1+ fx) 0))
-	 (else
-	  (scm-error 'misc-error "unpack" "format error" '() #f))))))))
-  
 ;;; --- last line ---
