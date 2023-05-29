@@ -1,0 +1,35 @@
+=== load-lang.patch ===========================================================
+
+multiple languages support via file extension or #lang header
+
+From scripts/compile pushed default assumption of #:from as 'scheme down
+into system/base/compile where filename and first line can be used to
+deduce intended "from" language.  If first line of a file is of the form
+  #lang ecmascript
+then the file is assumed consist of source language "ecmascript".
+
+* module/scripts/compile.scm (compile): changed default #:from to #f
+  from 'scheme 
+
+* module/system/base/compile.scm(lang-from-port, %file-extension-map,
+  add-lang-extension, lang-extension-for): added global
+  %file-extension-map with accessor lang-extension-for and updater
+  add-lang-extension.  Also, added lang-from-port to parse  first line,
+  looking for #lang. 
+
+* test-suite/tests.scm: added "load-lang" test.
+
+* test-suite/Makefile.am(SCM_TESTS): added tests/load-lang.test
+
+
+=== seq-src-fix.patch ========================================================
+
+When compiling to bytecode (-O0) source properties include multiple references
+to start of let.  See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=54478
+
+
+=== mmap-api.patch ===========================================================
+
+See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=27782
+
+
