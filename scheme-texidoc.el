@@ -1,6 +1,6 @@
 ;;; scheme-texidoc.el --- minor mode to make scheme doc-strings from texinfo
 
-;; Copyright (C) 2018 Matthew R. Wette
+;; Copyright (C) 2018,2023 Matthew Wette
 
 ;; Author: Matt Wette <mwette@alumni.caltech.edu>
 ;; Keywords: scheme, texinfo
@@ -27,6 +27,7 @@
 ;; todo: handle (define foo (let (...) (lambda (...) "docstring"
 ;; todo: set up key bindings -- seem to be having problems here (w/ Geiser)
 
+
 ;;; Code:
 
 ;;(require 'texinfmt)
@@ -35,29 +36,30 @@
   "A minor-mode to create Scheme docstrings from texinfo comments.
 Assume you have procedure that starts with
   (define (
-and is preceeded by comments that provide documentation between 
+and is preceeded by comments that provide documentation between
   ;; @deffn ...
-and 
+and
   ;; @end deffn
-Then set point to just before `(define (' and hit C-c t d'.  
+Then set point to just before `(define (' and hit C-c t d'.
 A texi2any formatted docstring will be inserted."
-  nil
-  " Tx"
-  '(("\C-ctd" . scheme-texidoc-transfer-deffn))
-  )
+  :init-value nil
+  :lighter " Tx"
+  :keymap '(("\C-ctd" . scheme-texidoc-transfer-deffn)))
 
-(defvar scheme-texidoc-version "v180905a")
+(defvar scheme-texidoc-version "v230523a")
 
 (defvar scheme-texidoc-texi-buffer-name "*scmtxi texi*")
 (defvar scheme-texidoc-text-buffer-name "*scmtxi text*")
 
 ;; moves point
 (defun find-deffn-above ()
-  "find deffn to this point; give up if hit blank before"
+  "find deffn to this point; give up if hit blank line"
   (interactive)
   (beginning-of-line)
   (while (and (not (looking-at ";; @deffn "))
-	      (not (looking-at "\\($\\| \\)")))
+	      ;;(not (looking-at "\\($\\| \\)"))
+	      (not (looking-at "$"))
+	      )
     (forward-line -1))
   (if (looking-at ";; @deffn ") (point) nil))
 
@@ -71,7 +73,7 @@ A texi2any formatted docstring will be inserted."
     (forward-line 1))
   (if (looking-at ";; @end deffn") (progn (forward-line) (point)) nil))
 
-;; we want to find range for deffn and point for docstring
+;; NOT USED
 (defun find-deffn-posns ()
   "Find points of interest."
   (interactive)
@@ -128,7 +130,88 @@ A texi2any formatted docstring will be inserted."
       (delete-char -1))
     ))
 
+(defun skip-whitespace ()
+  (interactive)
+  ;;(skip-chars-forward "[:space:]"))  ;; why not this work?
+  (skip-chars-forward " \t\n"))
+
+(defun maybe-remove-string ()
+  ;; remove sexp at point is string literal w/ first char `-'
+  t)
+
+;; We want to find range for deffn and point for docstring.  The patterns
+;; we want to solve (where define can be define* and \n can appear anywhere):
+;; + (define (foo x y) "doc" code ...)
+;; + (define foo (lambda (x y) "doc" code ...)
+;; + (define x (let () ... (lambda () "doc" code ...)))
+;; doc strings don't work for lambda-case
 (defun scheme-texidoc-transfer-deffn ()
+  "Insert a docstring formatted from the leading texinfo-comments."
+  (interactive)
+  (save-excursion
+    ;; Find the enclosing define.
+    (beginning-of-line)
+    (let* ((docpt (point))
+	   (tx-st (or (find-deffn-above)  ; texi start
+		      (error "@deffn not found")))
+	   (tx-nd (or (find-end-deffn-below) ; texi end
+		      (error "@end deffn not found")))
+	   (scm-buf (current-buffer)))	  ; user buffer
+      ;; We should be looking at (define now.
+
+      ;; Find spot for docstring and delete if string-literal there.
+      (unless (looking-at "(define") (error "(define not found"))
+      ;; next form
+      (down-list) (forward-sexp) (skip-whitespace)
+      (cond
+       ((looking-at "(") 		; (define (foo ...
+	(forward-sexp) (skip-whitespace))
+       (t				; (define foo ...
+	(forward-sexp) (skip-whitespace)
+	(cond
+	 ((looking-at "(let ")
+	  (forward-list) (backward-char) (backward-list) ;; kludge?
+	  (unless (looking-at "(lambda") (error "let not ending in lambda"))
+	  (down-list) (forward-sexp 2) (skip-whitespace))
+	 ((looking-at "(lambda ")
+	  (down-list) (forward-sexp 2) (skip-whitespace))
+	 (t (error "no match")))))
+      ;; now at first exp
+      ;; should cleaner way to do this
+      (setq docpt (point))
+
+      ;; Copy texi to working buffer and remove leading comment chars.
+      (set-buffer (get-buffer-create scheme-texidoc-texi-buffer-name))
+      (texinfo-mode)
+      (erase-buffer)
+      (insert-buffer-substring scm-buf tx-st tx-nd)
+      (goto-char (point-min))
+      (while (looking-at ";;")
+	(delete-char 2)
+	(if (looking-at " ") (delete-char 1))
+	(forward-line)
+	(beginning-of-line))
+      ;; Generate info format.
+      (goto-char (point-min)) (insert "\n")
+      (goto-char (point-max)) (insert "\n")
+      (texi2any-on-region (point-min) (point-max))
+      ;; Copy into working Scheme buffer.
+      (set-buffer (get-buffer scheme-texidoc-text-buffer-name))
+      (let* ((pt-st (point-min))
+	     (pt-nd (point-max))
+	     (text (buffer-substring pt-st pt-nd)))
+	(switch-to-buffer scm-buf)
+	;; Position to insert point.
+	(goto-char docpt)
+	(beginning-of-line)
+	;; Insert text from bufffer and indent.
+	(let ((inspt (point)))
+	  (insert (format "%S\n" text))
+	  (goto-char inspt)
+	  (indent-for-tab-command)))
+      )))
+
+(defun old-scheme-texidoc-transfer-deffn ()
   "Insert a docstring formatted from the leading texinfo-comments."
   (interactive)
   (save-excursion
@@ -137,7 +220,7 @@ A texi2any formatted docstring will be inserted."
     (unless (looking-at "(define")
       (error "needs love to find (define"))
     (let* ((defpt (point))
-	   (tx-st (find-deffn-above))	  ; texi start 
+	   (tx-st (find-deffn-above))	  ; texi start
 	   (tx-nd (find-end-deffn-below)) ; texi end
 	   (scm-buf (current-buffer)))	  ; user buffer
       (unless (and tx-st tx-nd)
