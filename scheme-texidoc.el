@@ -136,7 +136,11 @@ A texi2any formatted docstring will be inserted."
   (skip-chars-forward " \t\n"))
 
 (defun maybe-remove-string ()
-  ;; remove sexp at point is string literal w/ first char `-'
+  (when (looking-at "\"-")
+    (kill-sexp)
+    (delete-horizontal-space)
+    (if (looking-at "\n") (delete-char 1))
+    )
   t)
 
 ;; We want to find range for deffn and point for docstring.  The patterns
@@ -178,6 +182,7 @@ A texi2any formatted docstring will be inserted."
 	 (t (error "no match")))))
       ;; now at first exp
       ;; should cleaner way to do this
+      (maybe-remove-string)
       (setq docpt (point))
 
       ;; Copy texi to working buffer and remove leading comment chars.
@@ -208,7 +213,8 @@ A texi2any formatted docstring will be inserted."
 	(let ((inspt (point)))
 	  (insert (format "%S\n" text))
 	  (goto-char inspt)
-	  (indent-for-tab-command)))
+	  (indent-for-tab-command)
+	  ))
       )))
 
 (defun old-scheme-texidoc-transfer-deffn ()
