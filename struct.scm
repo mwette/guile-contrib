@@ -137,7 +137,7 @@
 	  (scm-error 'misc-error "unpack" "format error" '() #f))))))))
   
 ;; @deffn {Scheme} pack format datum ... => bytevector
-;; Like @code{struct.pack} from Python.  Pack the @var{datum ...} into a
+;; Like @code{struct.pack} from Python.  Pack @var{datum ...} into a
 ;; bytevector according to characters in @var{FORMAT}.  For example, 
 ;; @example
 ;; (pack "2Hd" 3 22 34.0) => #vu8(3 0 22 0 0 0 0 0 0 0 65 64)
@@ -145,10 +145,10 @@
 ;; In the above, the format characters indicate two unsigned short,
 ;; one double.  See the struct documentation for more detail.
 ;; @end deffn
-(define (pack format . args)
+(define (pack format . data)
   "- Scheme: pack format datum ... => bytevector
-     Like 'struct.pack' from Python.  Pack the DATUM ... into a
-     bytevector according to characters in FORMAT.  For example,
+     Like 'struct.pack' from Python.  Pack DATUM ... into a bytevector
+     according to characters in FORMAT.  For example,
           (pack \"2Hd\" 3 22 34.0) => #vu8(3 0 22 0 0 0 0 0 0 0 65 64)
      In the above, the format characters indicate two unsigned short,
      one double.  See the struct documentation for more detail."
@@ -163,10 +163,9 @@
       
       (let iter ((bx 0)		     ; index into resulting bytevector
 		 (fx f0)	     ; index into format
-		 (vals args)	     ; values to add
+		 (vals data)	     ; values to add
 		 (ct 0)		     ; count from format
 		 (ch #f))	     ; char from format
-	;;(simple-format #t "bx=~S fx=~S ct=~S ch=~S\n" bx fx ct ch)
 	(cond
 	 ((positive? ct)		; encode a value
 	  (set-value! bvec bx nd ct ch (car vals))
@@ -209,12 +208,11 @@
 	   (f0 (if (char-set-contains? cs:md (char-at 0)) 1 0))
 	   (nd (get-nd (char-at 0)))
 	   (ln (string-length format)))
-      (let iter ((rz '())			; result, list of bytevectors
+      (let iter ((rz '())               ; result, list of bytevectors
 		 (bx 0)			; index into input bytevector
-		 (fx f0)			; index into format string
+		 (fx f0)                ; index into format string
 		 (ct 0)			; format count
-		 (ch #f))			; format char
-	;;(simple-format #t "bx=~S fx=~S ct=~S ch=~S\n" bx fx ct ch)
+		 (ch #f))               ; format char
 	(cond
 	 ((> fx ln)
 	  (error "format size larger than input bv size"))
