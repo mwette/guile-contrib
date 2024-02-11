@@ -33,3 +33,6 @@ to start of let.  See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=54478
 See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=27782
 
 
+=== test-oom.patch ===========================================================
+
+Avoids out-of-memory failure in test-suite/standalone/
