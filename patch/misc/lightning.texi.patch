@@ -1,0 +1,26 @@
+--- lightning.texi	2022-06-20 07:44:21.159880656 -0700
++++ lightning.texi-fixed	2024-01-24 12:07:27.621547717 -0800
+@@ -83,22 +83,12 @@
+ @ifnottex
+ @node Top
+ @top @lightning{}
+-
+-@iftex
+-@macro comma
+-@verbatim{|,|}
+-@end macro
+-@end iftex
+-
+-@ifnottex
+-@macro comma
+-@verb{|,|}
+-@end macro
+ @end ifnottex
+ 
+ This document describes @value{TOPIC} the @lightning{} library for
+ dynamic code generation.
+ 
++@ifnottex
+ @menu
+ * Overview::                What GNU lightning is
+ * Installation::            Configuring and installing GNU lightning
