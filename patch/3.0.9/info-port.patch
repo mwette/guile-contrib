@@ -1,0 +1,695 @@
+Patch for directing information messages (e.g. auto-compile) to /dev/null
+  $ cd guile-3.0.9/
+  $ patch -p0 -b </path/to/info-port.patch
+
+You might need to configure with --disable-fast-install.  I did.
+
+  $ guile -I
+  @guile-user> 
+
+--- libguile/ports.c.orig	2021-03-19 06:01:33.000000000 -0700
++++ libguile/ports.c	2024-03-17 17:27:11.553174625 -0700
+@@ -432,6 +432,7 @@
+ static SCM cur_outport_fluid = SCM_BOOL_F;
+ static SCM cur_errport_fluid = SCM_BOOL_F;
+ static SCM cur_warnport_fluid = SCM_BOOL_F;
++static SCM cur_infoport_fluid = SCM_BOOL_F;
+ static SCM cur_loadport_fluid = SCM_BOOL_F;
+ 
+ SCM_DEFINE (scm_current_input_port, "current-input-port", 0, 0, 0,
+@@ -488,6 +489,18 @@
+ }
+ #undef FUNC_NAME
+ 
++SCM_DEFINE (scm_current_info_port, "current-info-port", 0, 0, 0,
++            (void),
++	    "Return the port to which diagnostic information should be sent.")
++#define FUNC_NAME s_scm_current_info_port
++{
++  if (scm_is_true (cur_infoport_fluid))
++    return scm_fluid_ref (cur_infoport_fluid);
++  else
++    return SCM_BOOL_F;
++}
++#undef FUNC_NAME
++
+ SCM_DEFINE (scm_current_load_port, "current-load-port", 0, 0, 0,
+ 	    (),
+ 	    "Return the current-load-port.\n"
+@@ -511,7 +524,7 @@
+ 
+ SCM
+ scm_set_current_output_port (SCM port)
+-#define FUNC_NAME "scm-set-current-output-port"
++#define FUNC_NAME "set-current-output-port"
+ {
+   SCM ooutp = scm_fluid_ref (cur_outport_fluid);
+   port = SCM_COERCE_OUTPORT (port);
+@@ -545,6 +558,18 @@
+ }
+ #undef FUNC_NAME
+ 
++SCM
++scm_set_current_info_port (SCM port)
++#define FUNC_NAME "set-current-info-port"
++{
++  SCM oinfop = scm_fluid_ref (cur_infoport_fluid);
++  port = SCM_COERCE_OUTPORT (port);
++  SCM_VALIDATE_OPOUTPORT (1, port);
++  scm_fluid_set_x (cur_infoport_fluid, port);
++  return oinfop;
++}
++#undef FUNC_NAME
++
+ void
+ scm_dynwind_current_input_port (SCM port)
+ #define FUNC_NAME NULL
+@@ -1305,7 +1330,7 @@
+ #undef FUNC_NAME
+ 
+ SCM_DEFINE (scm_set_port_conversion_strategy_x, "set-port-conversion-strategy!",
+-	    2, 0, 0, 
++	    2, 0, 0,
+ 	    (SCM port, SCM sym),
+ 	    "Sets the behavior of the interpreter when outputting a character\n"
+ 	    "that is not representable in the port's current encoding.\n"
+@@ -2155,7 +2180,7 @@
+ }
+ #undef FUNC_NAME
+ 
+-void 
++void
+ scm_ungets (const char *s, int n, SCM port)
+ {
+   /* This is simple minded and inefficient, but unreading strings is
+@@ -2247,7 +2272,7 @@
+ 
+   while (n--)
+     scm_ungetc (scm_i_string_ref (str, n), port);
+-  
++
+   return str;
+ }
+ #undef FUNC_NAME
+@@ -2366,7 +2391,7 @@
+ }
+ 
+ /* Clear a port's read buffers, returning the contents.  */
+-SCM_DEFINE (scm_drain_input, "drain-input", 1, 0, 0, 
++SCM_DEFINE (scm_drain_input, "drain-input", 1, 0, 0,
+             (SCM port),
+ 	    "This procedure clears a port's input buffers, similar\n"
+ 	    "to the way that force-output clears the output buffer.  The\n"
+@@ -2398,7 +2423,7 @@
+     }
+   else
+     result = scm_nullstr;
+-  
++
+   return result;
+ }
+ #undef FUNC_NAME
+@@ -3644,7 +3669,7 @@
+ 
+ /* Querying and setting positions, and character availability.  */
+ 
+-SCM_DEFINE (scm_char_ready_p, "char-ready?", 0, 1, 0, 
++SCM_DEFINE (scm_char_ready_p, "char-ready?", 0, 1, 0,
+ 	    (SCM port),
+ 	    "Return @code{#t} if a character is ready on input @var{port}\n"
+ 	    "and return @code{#f} otherwise.  If @code{char-ready?} returns\n"
+@@ -3680,7 +3705,7 @@
+   else
+     {
+       scm_t_port_type *ptob = SCM_PORT_TYPE (port);
+-      
++
+       if (ptob->input_waiting)
+         {
+           SCM ret;
+@@ -3754,7 +3779,7 @@
+         }
+ 
+       if (!ptob->seek || !pt->rw_random)
+-	SCM_MISC_ERROR ("port is not seekable", 
++	SCM_MISC_ERROR ("port is not seekable",
+                         scm_cons (fd_port, SCM_EOL));
+ 
+       scm_end_input (fd_port);
+@@ -3843,7 +3868,7 @@
+       /* must supply length if object is a filename.  */
+       if (scm_is_string (object))
+         SCM_MISC_ERROR("must supply length if OBJECT is a filename", SCM_EOL);
+-      
++
+       length = scm_seek (object, SCM_INUM0, scm_from_int (SEEK_CUR));
+     }
+ 
+@@ -4021,7 +4046,7 @@
+ 
+ /* Iterating over all ports.  */
+ 
+-struct for_each_data 
++struct for_each_data
+ {
+   void (*proc) (void *data, SCM p);
+   void *data;
+@@ -4031,7 +4056,7 @@
+ for_each_trampoline (void *data, SCM port, SCM result)
+ {
+   struct for_each_data *d = data;
+-  
++
+   d->proc (d->data, port);
+ 
+   return result;
+@@ -4041,7 +4066,7 @@
+ scm_c_port_for_each (void (*proc)(void *data, SCM p), void *data)
+ {
+   struct for_each_data d;
+-  
++
+   d.proc = proc;
+   d.data = data;
+ 
+@@ -4062,13 +4087,13 @@
+ 	    "@var{proc} is applied exactly once to every port that exists\n"
+ 	    "in the system at the time @code{port-for-each} is invoked.\n"
+ 	    "Changes to the port table while @code{port-for-each} is running\n"
+-	    "have no effect as far as @code{port-for-each} is concerned.") 
++	    "have no effect as far as @code{port-for-each} is concerned.")
+ #define FUNC_NAME s_scm_port_for_each
+ {
+   SCM_VALIDATE_PROC (1, proc);
+ 
+   scm_c_port_for_each (scm_for_each_trampoline, SCM_UNPACK_POINTER (proc));
+-  
++
+   return SCM_UNSPECIFIED;
+ }
+ #undef FUNC_NAME
+@@ -4155,6 +4180,7 @@
+   scm_c_define ("%current-output-port-fluid", cur_outport_fluid);
+   scm_c_define ("%current-error-port-fluid", cur_errport_fluid);
+   scm_c_define ("%current-warning-port-fluid", cur_warnport_fluid);
++  scm_c_define ("%current-info-port-fluid", cur_infoport_fluid);
+ }
+ 
+ void
+@@ -4189,6 +4215,7 @@
+   cur_outport_fluid = scm_make_fluid ();
+   cur_errport_fluid = scm_make_fluid ();
+   cur_warnport_fluid = scm_make_fluid ();
++  cur_infoport_fluid = scm_make_fluid ();
+   cur_loadport_fluid = scm_make_fluid ();
+ 
+   default_port_encoding_var =
+@@ -4227,4 +4254,8 @@
+                       (scm_t_subr) scm_current_error_port);
+   scm_c_define_gsubr (s_scm_current_warning_port, 0, 0, 0,
+                       (scm_t_subr) scm_current_warning_port);
++
++  /* Used by welcome and compiler routines. */
++  scm_c_define_gsubr (s_scm_current_info_port, 0, 0, 0,
++                      (scm_t_subr) scm_current_info_port);
+ }
+--- libguile/init.c.orig	2022-01-10 08:58:37.000000000 -0800
++++ libguile/init.c	2024-03-17 17:27:11.557174587 -0700
+@@ -201,6 +201,7 @@
+   scm_set_current_error_port
+     (scm_standard_stream_to_port (2, isatty (2) ? "w0" : "w"));
+   scm_set_current_warning_port (scm_current_error_port ());
++  scm_set_current_info_port (scm_current_error_port ());
+ }
+ 
+ 
+--- libguile/ports.h.orig	2018-09-22 13:51:40.000000000 -0700
++++ libguile/ports.h	2024-03-17 17:27:11.557174587 -0700
+@@ -139,11 +139,13 @@
+ SCM_API SCM scm_current_output_port (void);
+ SCM_API SCM scm_current_error_port (void);
+ SCM_API SCM scm_current_warning_port (void);
++SCM_API SCM scm_current_info_port (void);
+ SCM_API SCM scm_current_load_port (void);
+ SCM_API SCM scm_set_current_input_port (SCM port);
+ SCM_API SCM scm_set_current_output_port (SCM port);
+ SCM_API SCM scm_set_current_error_port (SCM port);
+ SCM_API SCM scm_set_current_warning_port (SCM port);
++SCM_API SCM scm_set_current_info_port (SCM port);
+ SCM_API void scm_dynwind_current_input_port (SCM port);
+ SCM_API void scm_dynwind_current_output_port (SCM port);
+ SCM_API void scm_dynwind_current_error_port (SCM port);
+--- libguile/load.c.orig	2022-10-21 08:39:38.000000000 -0700
++++ libguile/load.c	2024-03-17 17:27:11.557174587 -0700
+@@ -80,7 +80,7 @@
+ static SCM the_reader = SCM_BOOL_F;
+ 
+ 
+-SCM_DEFINE (scm_primitive_load, "primitive-load", 1, 0, 0, 
++SCM_DEFINE (scm_primitive_load, "primitive-load", 1, 0, 0,
+            (SCM filename),
+ 	    "Load the file named @var{filename} and evaluate its contents in\n"
+ 	    "the top-level environment. The load paths are not searched;\n"
+@@ -147,7 +147,7 @@
+ 
+ /* Builtin path to scheme library files. */
+ #ifdef SCM_PKGDATA_DIR
+-SCM_DEFINE (scm_sys_package_data_dir, "%package-data-dir", 0, 0, 0, 
++SCM_DEFINE (scm_sys_package_data_dir, "%package-data-dir", 0, 0, 0,
+             (),
+ 	    "Return the name of the directory where Scheme packages, modules and\n"
+ 	    "libraries are kept.  On most Unix systems, this will be\n"
+@@ -236,7 +236,7 @@
+ /* Ellipsis: "..." */
+ static SCM scm_ellipsis;
+ 
+-SCM_DEFINE (scm_parse_path, "parse-path", 1, 1, 0, 
++SCM_DEFINE (scm_parse_path, "parse-path", 1, 1, 0,
+             (SCM path, SCM tail),
+ 	    "Parse @var{path}, which is expected to be a colon-separated\n"
+ 	    "string, into a list and return the resulting list with\n"
+@@ -249,7 +249,7 @@
+ #else
+   SCM sep = SCM_MAKE_CHAR (':');
+ #endif
+-  
++
+   if (SCM_UNBNDP (tail))
+     tail = SCM_EOL;
+   return (scm_is_false (path)
+@@ -338,7 +338,7 @@
+   if (env && strcmp (env, "") == 0)
+     /* special-case interpret system-path=="" as meaning no system path instead
+        of '("") */
+-    ; 
++    ;
+   else if (env)
+     path = scm_parse_path (scm_from_locale_string (env), path);
+   else
+@@ -350,7 +350,7 @@
+   env = scm_i_mirror_backslashes (getenv ("GUILE_SYSTEM_COMPILED_PATH"));
+   if (env && strcmp (env, "") == 0)
+     /* like above */
+-    ; 
++    ;
+   else if (env)
+     cpath = scm_parse_path (scm_from_locale_string (env), cpath);
+   else
+@@ -441,7 +441,7 @@
+   size_t len = scm_to_locale_stringbuf (str, buf->ptr, max_len);
+   if (len > max_len)
+     {
+-      /* buffer is too small, double its size and try again. 
++      /* buffer is too small, double its size and try again.
+        */
+       stringbuf_grow (buf);
+       stringbuf_cat_locale_string (buf, str);
+@@ -466,7 +466,7 @@
+   size_t len = strlen (str);
+   if (len > max_len)
+     {
+-      /* buffer is too small, double its size and try again. 
++      /* buffer is too small, double its size and try again.
+        */
+       stringbuf_grow (buf);
+       stringbuf_cat (buf, str);
+@@ -571,11 +571,11 @@
+   else
+     {
+       compiled_is_newer = 0;
+-      scm_puts (";;; note: source file ", scm_current_warning_port ());
+-      scm_display (full_filename, scm_current_warning_port ());
+-      scm_puts ("\n;;;       newer than compiled ", scm_current_warning_port ());
+-      scm_display (compiled_filename, scm_current_warning_port ());
+-      scm_puts ("\n", scm_current_warning_port ());
++      scm_puts (";;; note: source file ", scm_current_info_port ());
++      scm_display (full_filename, scm_current_info_port ());
++      scm_puts ("\n;;;       newer than compiled ", scm_current_info_port ());
++      scm_display (compiled_filename, scm_current_info_port ());
++      scm_puts ("\n", scm_current_info_port ());
+     }
+ 
+   return compiled_is_newer;
+@@ -726,9 +726,9 @@
+ 
+       buf.ptr = buf.buf;
+       stringbuf_cat_locale_string (&buf, dir);
+-	
++
+       /* Concatenate the path name and the filename. */
+-      
++
+       if (buf.ptr > buf.buf
+           && !is_file_name_separator (SCM_MAKE_CHAR (buf.ptr[-1])))
+ 	stringbuf_cat (&buf, FILE_NAME_SEPARATOR_STRING);
+@@ -740,10 +740,10 @@
+       for (exts = extensions; scm_is_pair (exts); exts = SCM_CDR (exts))
+ 	{
+ 	  SCM ext = SCM_CAR (exts);
+-	  
++
+ 	  buf.ptr = buf.buf + sans_ext_len;
+ 	  stringbuf_cat_locale_string (&buf, ext);
+-	  
++
+ 	  /* If the file exists at all, we should return it.  If the
+ 	     file is inaccessible, then that's an error.  */
+ 
+@@ -770,15 +770,15 @@
+               if (found_stale_file && *found_stale_file)
+                 {
+                   scm_puts (";;; found fresh compiled file at ",
+-                                     scm_current_warning_port ());
+-                  scm_display (found, scm_current_warning_port ());
+-                  scm_newline (scm_current_warning_port ());
++                                     scm_current_info_port ());
++                  scm_display (found, scm_current_info_port ());
++                  scm_newline (scm_current_info_port ());
+                 }
+ 
+ 	      goto end;
+ 	    }
+ 	}
+-      
++
+       if (!SCM_NULL_OR_NIL_P (exts))
+ 	scm_wrong_type_arg_msg (NULL, 0, extensions, "proper list");
+     }
+@@ -796,7 +796,7 @@
+    If we find one, return its full pathname; otherwise, return #f.
+    If FILENAME is absolute, return it unchanged.
+    We also fill *stat_buf corresponding to the returned pathname.
+-   If given, EXTENSIONS is a list of strings; for each directory 
++   If given, EXTENSIONS is a list of strings; for each directory
+    in PATH, we search for FILENAME concatenated with each EXTENSION.
+   */
+ static SCM
+@@ -880,9 +880,9 @@
+ 
+       buf.ptr = buf.buf;
+       stringbuf_cat_locale_string (&buf, dir);
+-	
++
+       /* Concatenate the path name and the filename. */
+-      
++
+       if (buf.ptr > buf.buf
+           && !is_file_name_separator (SCM_MAKE_CHAR (buf.ptr[-1])))
+ 	stringbuf_cat (&buf, FILE_NAME_SEPARATOR_STRING);
+@@ -894,10 +894,10 @@
+       for (exts = extensions; scm_is_pair (exts); exts = SCM_CDR (exts))
+ 	{
+ 	  SCM ext = SCM_CAR (exts);
+-	  
++
+ 	  buf.ptr = buf.buf + sans_ext_len;
+ 	  stringbuf_cat_locale_string (&buf, ext);
+-	  
++
+ 	  /* If the file exists at all, we should return it.  If the
+ 	     file is inaccessible, then that's an error.  */
+ 
+@@ -909,7 +909,7 @@
+ 	      goto end;
+ 	    }
+ 	}
+-      
++
+       if (!SCM_NULL_OR_NIL_P (exts))
+ 	scm_wrong_type_arg_msg (NULL, 0, extensions, "proper list");
+     }
+@@ -984,7 +984,7 @@
+    The file must be readable, and not a directory.
+    If we find one, return its full filename; otherwise, return #f.
+    If FILENAME is absolute, return it unchanged.  */
+-SCM_DEFINE (scm_sys_search_load_path, "%search-load-path", 1, 0, 0, 
++SCM_DEFINE (scm_sys_search_load_path, "%search-load-path", 1, 0, 0,
+ 	    (SCM filename),
+ 	    "Search @var{%load-path} for the file named @var{filename},\n"
+ 	    "which must be readable by the current user.  If @var{filename}\n"
+@@ -996,7 +996,7 @@
+ #define FUNC_NAME s_scm_sys_search_load_path
+ {
+   struct stat stat_buf;
+-  
++
+   SCM_VALIDATE_STRING (1, filename);
+ 
+   return search_path (*scm_loc_load_path, filename, *scm_loc_load_extensions,
+@@ -1017,9 +1017,9 @@
+   SCM source = SCM_PACK_POINTER (data);
+   SCM comp_mod, compile_file;
+ 
+-  scm_puts (";;; compiling ", scm_current_warning_port ());
+-  scm_display (source, scm_current_warning_port ());
+-  scm_newline (scm_current_warning_port ());
++  scm_puts (";;; compiling ", scm_current_info_port ());
++  scm_display (source, scm_current_info_port ());
++  scm_newline (scm_current_info_port ());
+ 
+   comp_mod = scm_c_resolve_module ("system base compile");
+   compile_file = scm_module_variable (comp_mod, sym_compile_file);
+@@ -1046,17 +1046,17 @@
+       /* Assume `*current-warning-prefix*' has an appropriate value.  */
+       res = scm_call_n (scm_variable_ref (compile_file), args, 5);
+ 
+-      scm_puts (";;; compiled ", scm_current_warning_port ());
+-      scm_display (res, scm_current_warning_port ());
+-      scm_newline (scm_current_warning_port ());
++      scm_puts (";;; compiled ", scm_current_info_port ());
++      scm_display (res, scm_current_info_port ());
++      scm_newline (scm_current_info_port ());
+       return res;
+     }
+   else
+     {
+-      scm_puts (";;; it seems ", scm_current_warning_port ());
+-      scm_display (source, scm_current_warning_port ());
++      scm_puts (";;; it seems ", scm_current_info_port ());
++      scm_display (source, scm_current_info_port ());
+       scm_puts ("\n;;; is part of the compiler; skipping auto-compilation\n",
+-                scm_current_warning_port ());
++                scm_current_info_port ());
+       return SCM_BOOL_F;
+     }
+ }
+@@ -1099,7 +1099,7 @@
+     {
+       scm_puts (";;; note: auto-compilation is enabled, set GUILE_AUTO_COMPILE=0\n"
+                 ";;;       or pass the --no-auto-compile argument to disable.\n",
+-                scm_current_warning_port ());
++                scm_current_info_port ());
+       message_shown = 1;
+     }
+ 
+@@ -1232,15 +1232,15 @@
+           if (found_stale_compiled_file)
+             {
+               scm_puts (";;; found fresh local cache at ",
+-                                 scm_current_warning_port ());
+-              scm_display (fallback, scm_current_warning_port ());
+-              scm_newline (scm_current_warning_port ());
++                                 scm_current_info_port ());
++              scm_display (fallback, scm_current_info_port ());
++              scm_newline (scm_current_info_port ());
+             }
+           compiled_thunk = try_load_thunk_from_file (fallback);
+         }
+       free (fallback_chars);
+     }
+-  
++
+   if (scm_is_false (full_filename) && scm_is_false (compiled_thunk))
+     {
+       if (scm_is_true (scm_procedure_p (exception_on_not_found)))
+@@ -1288,7 +1288,7 @@
+   eval_thunk =
+     load_thunk_from_path (scm_from_utf8_string ("ice-9/eval.go"),
+                           eval_scm, &stat_source, &found_stale_eval_go);
+-  
++
+   if (scm_is_true (eval_thunk))
+     scm_call_0 (eval_thunk);
+   else
+@@ -1396,5 +1396,3 @@
+       *scm_loc_fresh_auto_compile = SCM_BOOL_F;
+     }
+ }
+-  
+-  
+--- module/ice-9/boot-9.scm.orig	2023-01-25 05:11:38.000000000 -0800
++++ module/ice-9/boot-9.scm	2024-03-17 17:27:11.557174587 -0700
+@@ -190,6 +190,13 @@
+   (newline (current-warning-port))
+   (car (last-pair stuff)))
+ 
++(define (info . stuff)
++  (newline (current-info-port))
++  (display ";;; FYI " (current-info-port))
++  (display stuff (current-info-port))
++  (newline (current-info-port))
++  (car (last-pair stuff)))
++
+ 
+ 
+ ;;; {Features}
+@@ -4328,15 +4335,15 @@
+            (load-thunk-from-file go-file-name)
+            (begin
+              (when gostat
+-               (format (current-warning-port)
++               (format (current-info-port)
+                        ";;; note: source file ~a\n;;;       newer than compiled ~a\n"
+                        name go-file-name))
+              (cond
+               (%load-should-auto-compile
+                (%warn-auto-compilation-enabled)
+-               (format (current-warning-port) ";;; compiling ~a\n" name)
++               (format (current-info-port) ";;; compiling ~a\n" name)
+                (let ((cfn (compile name)))
+-                 (format (current-warning-port) ";;; compiled ~a\n" cfn)
++                 (format (current-info-port) ";;; compiled ~a\n" cfn)
+                  (load-thunk-from-file cfn)))
+               (else #f)))))
+      #:warning "WARNING: compilation of ~a failed:\n" name))
+--- module/ice-9/command-line.scm.orig	2023-01-13 14:51:52.000000000 -0800
++++ module/ice-9/command-line.scm	2024-03-17 19:29:23.021250716 -0700
+@@ -6,12 +6,12 @@
+ ;;;; modify it under the terms of the GNU Lesser General Public
+ ;;;; License as published by the Free Software Foundation; either
+ ;;;; version 3 of the License, or (at your option) any later version.
+-;;;; 
++;;;;
+ ;;;; This library is distributed in the hope that it will be useful,
+ ;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+ ;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ ;;;; Lesser General Public License for more details.
+-;;;; 
++;;;;
+ ;;;; You should have received a copy of the GNU Lesser General Public
+ ;;;; License along with this library; if not, write to the Free Software
+ ;;;; Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+@@ -81,7 +81,7 @@
+       (if packager-version
+           (format port (G_ "Packaged by ~a (~a)\n") packager packager-version)
+           (format port (G_ "Packaged by ~a\n") packager)))
+-  
++
+   (display copyright port)
+   (newline port)
+   (newline port)
+@@ -135,6 +135,7 @@
+                  files.
+   --listen[=P]   listen on a local port or a path for REPL clients;
+                  if P is not given, the default is local port 37146
++  -I             silence informative diagnostics
+   -q             inhibit loading of user init file
+   --use-srfi=LS  load SRFI modules for the SRFIs in LS,
+                  which is a list of numbers like \"2,13,14\"
+@@ -245,7 +246,7 @@
+                 (finish (cdr args)
+                         (cons `((@@ (ice-9 command-line) load/lang) ,arg0)
+                               out))))
+-           
++
+            ((string=? arg "-c")         ; evaluate expr
+             (if (null? args)
+                 (error "missing argument to `-c' switch"))
+@@ -385,7 +386,11 @@
+            ((string=? arg "--listen")   ; start a repl server
+             (parse args
+                    (cons '((@@ (system repl server) spawn-server)) out)))
+-           
++
++           ((string=? arg "-I")   ; silence diagostics
++            (parse args
++                   (cons `(current-info-port (%make-void-port "w")) out)))
++
+            ((string-prefix? "--listen=" arg) ; start a repl server
+             (parse
+              args
+@@ -437,7 +442,7 @@
+           (begin
+             (set-default-vm-engine! 'debug)
+             (set-vm-engine! 'debug)))
+-      
++
+       ;; Return this value.
+       `(;; It would be nice not to load up (ice-9 control), but the
+         ;; default-prompt-handler is nontrivial.
+--- module/ice-9/ports.scm.orig	2021-02-06 12:43:05.000000000 -0800
++++ module/ice-9/ports.scm	2024-03-18 06:51:28.398916144 -0700
+@@ -30,10 +30,10 @@
+             %port-property
+             %set-port-property!
+             current-input-port current-output-port
+-            current-error-port current-warning-port
++            current-error-port current-warning-port current-info-port
+             current-load-port
+             set-current-input-port set-current-output-port
+-            set-current-error-port
++            set-current-error-port set-current-info-port
+             port-mode
+             port?
+             input-port?
+@@ -144,7 +144,8 @@
+                               call-with-output-string
+                               close-port
+                               current-error-port
+-                              current-warning-port))
++                              current-warning-port
++                              current-info-port))
+ 
+ (load-extension (string-append "libguile-" (effective-version))
+                 "scm_init_ice_9_ports")
+@@ -284,6 +285,13 @@
+                         (error "expected an output port" x))
+                       x)))
+ 
++(define current-info-port
++  (fluid->parameter %current-info-port-fluid
++                    (lambda (x)
++                      (unless (output-port? x)
++                        (error "expected an output port" x))
++                      x)))
++
+ 
+ 
+ 
+@@ -390,6 +398,10 @@
+   "Set the current default error port to @var{port}."
+   (current-error-port port))
+ 
++(define (set-current-info-port port)
++  "Set the current default info port to @var{port}."
++  (current-info-port port))
++
+ 
+ ;;;; high level routines
+ 
+@@ -422,7 +434,7 @@
+   (open-file file (if binary "wb" "w")
+              #:encoding encoding))
+ 
+-(define (open-io-file str) 
++(define (open-io-file str)
+   "Open file with name STR for both input and output."
+   (open-file str OPEN_BOTH))
+ 
+--- module/system/repl/common.scm.orig	2023-01-13 14:51:52.000000000 -0800
++++ module/system/repl/common.scm	2024-03-17 17:27:11.557174587 -0700
+@@ -157,10 +157,10 @@
+               #:debug debug))
+ 
+ (define (repl-welcome repl)
+-  (display *version*)
+-  (newline)
+-  (newline)
+-  (display "Enter `,help' for help.\n"))
++  (display *version* (current-info-port))
++  (newline (current-info-port))
++  (newline (current-info-port))
++  (display "Enter `,help' for help.\n" (current-info-port)))
+ 
+ (define (repl-prompt repl)
+   (cond
