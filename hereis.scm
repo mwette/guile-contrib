@@ -10,8 +10,26 @@
 (define-module (hereis)
   #:export (enable-hereis disable-hereis read-hereis-text))
 
+;; @deffn {procedure} read-hereis-text reader-char port
+;; This reader macro procedure reads extended strings using the
+;; delimiter @code{"""}.  Enable and disable its use via the
+;; syntax @code{(enable-hereis)} and @code{(disable-hereis)}.
+;; Example use:
+;; @example
+;; (define text #"""
+;;   "Run. Matt. Run.", he said.
+;; """)
+;; @end example
+;; @end deffn
 (define (read-hereis-text reader-char port)
-  (define beg-sq '(#\" #\" #\"))
+  "- procedure: read-hereis-text reader-char port
+     This reader macro procedure reads extended strings using the
+     delimiter ‘\"\"\"’.  Enable and disable its use via the syntax
+     ‘(enable-hereis)’ and ‘(disable-hereis)’.  Example use:
+          (define text #\"\"\"
+            \"Run. Matt. Run.\", he said.
+          \"\"\")"
+  (define start-sq '(#\" #\" #\"))
   (define end-sq '(#\" #\" #\"))
 
   (define (skip-seq seq ch)
@@ -22,12 +40,9 @@
        ((char=? ch (car bs)) (loop (cdr bs) (read-char port)))
        (else (error "hereis: coding error")))))
 
-  (define (skip-nl ch)
-    (if (char=? #\newline ch) (read-char port) ch))
-
-  ;;(assert (eq? reader-char (car beg-sq))
   (let loop ((chl '()) (ex '()) (es end-sq)
-             (ch (skip-nl (skip-seq beg-sq reader-char))))
+             (ch (let ((ch (skip-seq start-sq reader-char)))
+                   (if (char=? #\newline ch) (read-char port) ch))))
     (cond
      ((eof-object? ch) (error "bad hereis expression"))
      ((char=? ch (car es))
