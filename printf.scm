@@ -24,8 +24,8 @@
 ;; conv: #\d #\x #\f #\e -- add #\o: just the (display obj)
 
 ;; Architecture:
-;; Parse format string to list of alternating {string, formatter} objects
-;; then send to output port applying formatter to objects on the way.
+;; Parse format string to list of {string, formatter} objects; then
+;; send to output port applying formatter to objects on the way.
 
 ;;; Code:
 
