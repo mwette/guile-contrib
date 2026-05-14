@@ -33,8 +33,8 @@
 ;; @code{op} is one of @code{dup}, @code{del} or  @code{ins}, indicating
 ;; duplication, deletion or insertion, respectively, and @code{end} is
 ;; the index just past the last elemnt.  The arguments
-;; for @code{dup} and @code{del} are with respect to seqence @{a},
-;; and the @code{ins} are with respect to sequence @code{b}.
+;; for @code{dup} and @code{del} are with respect to seqence @var{a},
+;; and the @code{ins} are with respect to sequence @var{b}.
 ;; @var{procs} must be a record created with @code{make-seq-procs}.
 ;; The parent module includes @code{str-procs} for comparing sequences
 ;; of characters in two strings, and (in the future) @code{text-procs}
@@ -51,6 +51,24 @@
 ;; @end enumerate
 ;; @end deffn
 (define* (sequence-diff a b procs #:optional junk?)
+  "- Procedure: sequence-diff a b procs
+     This procedure compares two comparable sequences using PROCS, a set
+     of processing procedures, generates a list of operations.  The
+     operations are of the form ‘(op start end)’ where ‘op’ is one of
+     ‘dup’, ‘del’ or ‘ins’, indicating duplication, deletion or
+     insertion, respectively, and ‘end’ is the index just past the last
+     elemnt.  The arguments for ‘dup’ and ‘del’ are with respect to
+     seqence A, and the ‘ins’ are with respect to sequence B.  PROCS
+     must be a record created with ‘make-seq-procs’.  The parent module
+     includes ‘str-procs’ for comparing sequences of characters in two
+     strings, and (in the future) ‘text-procs’ for comparing lines of
+     text.
+          > (sequence-diff \"abc\" \"bcd\" str-procs)
+          $1 = ((del 0 1) (dup 1 3) (ins 2 3))
+     The above says
+       1. Delete char's 0 to 0 (a) from a.
+       2. Duplicae char's 1 to 3 (b c) from a.
+       3. Insert char's 2 to 3 (d) from b."
   (letrec*
       ((seq-len (seq-len-proc procs))
        (seq-ref (seq-ref-proc procs))
