@@ -77,22 +77,22 @@ A texi2any formatted docstring will be inserted."
     (save-excursion
       (set-buffer text-buffer)
       (erase-buffer))
-    (zerop (call-process-region start end "texi2any" nil text-buffer nil
-				"--plaintext"))
-    (save-excursion
-      (set-buffer text-buffer)
-      ;; remove warning messages
-      (goto-char (point-min))
-      (while (looking-at "-:")
-	(delete-region (point-min) (progn (forward-line) (point))))
-      ;; clean up
-      (goto-char (point-min))
-      (if (looking-at " -") (delete-char 2))
-      (while (> (forward-line) 0) (if (looking-at "  ") (delete-char 2)))
-      (goto-char (point-max))
-      (delete-trailing-whitespace)
-      (delete-char -1))
-    ))
+    (if (zerop (call-process-region start end "texi2any" nil
+				    text-buffer nil "--plaintext"))
+	(save-excursion
+	  (set-buffer text-buffer)
+	  ;; remove warning messages
+	  (goto-char (point-min))
+	  (while (looking-at "-:")
+	    (delete-region (point-min) (progn (forward-line) (point))))
+	  ;; clean up
+	  (goto-char (point-min))
+	  (if (looking-at " -") (delete-char 2))
+	  (while (> (forward-line) 0) (if (looking-at "  ") (delete-char 2)))
+	  (goto-char (point-max))
+	  (delete-trailing-whitespace)
+	  (delete-char -1))
+      (error "texi2any failed"))))
 
 (defun skip-whitespace ()
   (skip-chars-forward " \t\n"))
