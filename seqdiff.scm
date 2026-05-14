@@ -1,6 +1,6 @@
 ;; seqdiff.scm - generate sequence diff
 ;;
-;; Copyright (C) 2020,2023 Matthew R. Wette
+;; Copyright (C) 2020,2023,2026 Matthew Wette
 ;;
 ;; This library is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU Lesser General Public
@@ -8,10 +8,11 @@
 ;; version 3 of the License, or (at your option) any later version.
 ;; This software is reserved for personal use by the copyright holder.
 
-;; This code is derived from Python's difflib.
-
 (define-module (seqdiff)
-  #:export (sequence-diff string-diff make-seq-procs str-procs)
+  #:export (sequence-diff
+            make-seq-procs 
+            string-diff str-procs
+            text-diff text-procs)
   #:use-module (srfi srfi-9))
 
 (define-record-type seq-procs
@@ -24,6 +25,31 @@
   (seq-hset! seq-hset!-proc))
 
 ;; junk? is predicate taking elt
+
+;; @deffn {Procedure} sequence-diff a b procs
+;; This procedure compares two comparable sequences using @var{procs},
+;; a set of processing procedures, generates a list of operations.
+;; The operations are of the form @code{(op start end)} where
+;; @code{op} is one of @code{dup}, @code{del} or  @code{ins}, indicating
+;; duplication, deletion or insertion, respectively, and @code{end} is
+;; the index just past the last elemnt.  The arguments
+;; for @code{dup} and @code{del} are with respect to seqence @{a},
+;; and the @code{ins} are with respect to sequence @code{b}.
+;; @var{procs} must be a record created with @code{make-seq-procs}.
+;; The parent module includes @code{str-procs} for comparing sequences
+;; of characters in two strings, and (in the future) @code{text-procs}
+;; for comparing lines of text.
+;; @example
+;; > (sequence-diff "abc" "bcd" str-procs)
+;; $1 = ((del 0 1) (dup 1 3) (ins 2 3))
+;; @end example
+;; The above says
+;; @enumerate
+;; @item Delete char's 0 to 0 (a) from a.
+;; @item Duplicae char's 1 to 3 (b c) from a.
+;; @item Insert char's 2 to 3 (d) from b.
+;; @end enumerate
+;; @end deffn
 (define* (sequence-diff a b procs #:optional junk?)
   (letrec*
       ((seq-len (seq-len-proc procs))
@@ -116,10 +142,18 @@
 
     (gen-ops (get-matches))))
 
-(define str-procs (make-seq-procs string-length string-ref char=?
-				  hashq-ref hashq-set!))
+
+(define str-procs
+  (make-seq-procs string-length string-ref char=? hashq-ref hashq-set!))
 
 (define* (string-diff a b #:optional junk?)
   (sequence-diff a b str-procs junk?))
+
+
+(define text-procs
+  (make-seq-procs length list-ref string=? hash-ref hash-set!))
+
+(define* (text-diff a b #:optional junk?)
+  (sequence-diff a b text-procs junk?))
 
 ;; --- last line ---

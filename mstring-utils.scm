@@ -1,6 +1,6 @@
-;;; string-utils.scm - like python longstrings
+;;; mstring-utils.scm - like python longstrings
 ;;;
-;;; Copyright (C) 2023-2025 Matthew Wette
+;;; Copyright (C) 2023-2026 Matthew Wette
 ;;;
 ;;; This library is free software; you can redistribute it and/or
 ;;; modify it under the terms of the GNU Lesser General Public
@@ -10,7 +10,7 @@
 ;; see also string-diff in seqdiff.scm
 (define-module (mstring-utils)
   #:export (string-search-rev
-            enable-longstrings disable-longstrings read-hereis-text))
+            enable-longstrings disable-longstrings read-longstring))
 
 (define (string-search-rev pat str)
   (let ((chl (reverse (string->list pat))))
